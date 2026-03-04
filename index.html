@@ -12,14 +12,18 @@
 
         /* ЛЕВАЯ ПАНЕЛЬ */
         .sidebar { width: 260px; background-color: #ffffff; border-right: 1px solid #e0e0e0; display: flex; flex-direction: column; z-index: 10; }
+
         .user-profile { padding: 20px 15px; border-bottom: 1px solid #e0e0e0; display: flex; align-items: center; justify-content: space-between; background: #f9f9f9; cursor: pointer; }
         .user-profile:hover { background: #f1f1f1; }
         .user-avatar { width: 35px; height: 35px; background: #888; border-radius: 50%; }
+
         .menu-item { padding: 15px 20px; border-bottom: 1px solid #eee; font-weight: 500; cursor: pointer; display: flex; align-items: center; gap: 10px; }
         .menu-item:hover { background: #f5f5f5; }
 
         /* ОСНОВНАЯ ЧАСТЬ */
         .main-content { flex: 1; display: flex; flex-direction: column; background: #fff; position: relative; }
+
+        /* КОНТЕЙНЕР ДЛЯ ОКОН */
         .windows-container { flex: 1; display: flex; overflow-x: auto; padding: 20px; gap: 20px; background: #eaeff2; }
         
         /* ОКНА ЧАТА */
@@ -52,6 +56,7 @@
                 <div class="user-avatar"></div>
                 <strong>Мой Профиль</strong>
             </div>
+            <div>⚙️</div>
         </div>
         <div class="menu-item" onclick="addWindow()">➕ Добавить окно</div>
         <div class="menu-item" style="margin-top: auto; color: red;">🚪 Выход</div>
@@ -69,25 +74,27 @@
     </div>
 
     <script>
-        // ==========================================
-        // ВСТАВЬ СЮДА СВОЮ РАБОЧУЮ ССЫЛКУ N8N
-        // ==========================================
+        // Твоя ссылка на n8n
         const N8N_WEBHOOK_URL = 'https://tgdomen.ru/webhook/3bcfce39-4b24-4493-b3a7-cab0030e8a36';
 
-        let lastAnswersByModel = {}; // Хранилище ответов для саммари
+        let lastAnswersByModel = {}; 
 
-        // --- СОЗДАНИЕ ОКНА ---
+        // --- 1. СОЗДАНИЕ ОКНА ---
         function addWindow() {
             const container = document.getElementById('windowsContainer');
             const win = document.createElement('div');
             win.className = 'ai-window';
             
+            // Здесь список моделей как было у тебя
             win.innerHTML = `
                 <div class="ai-header">
                     <select class="ai-select">
                         <option value="gpt-4o">ChatGPT-4o</option>
+                        <option value="gpt-4o-mini">ChatGPT-4o-mini</option>
                         <option value="claude-3-5-sonnet">Claude 3.5 Sonnet</option>
                         <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
+                        <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
+                        <option value="yandex-gpt">YandexGPT</option>
                     </select>
                 </div>
                 <div class="ai-chat-box"></div>
@@ -95,7 +102,7 @@
             container.appendChild(win);
         }
 
-        // --- ОТПРАВКА СООБЩЕНИЯ В НЕЙРОСЕТИ ---
+        // --- 2. ОТПРАВКА ВОПРОСА ---
         async function sendMessage() {
             const input = document.getElementById('mainInput');
             const text = input.value.trim();
@@ -104,26 +111,26 @@
             const windows = document.querySelectorAll('.ai-window');
             if (windows.length === 0) return;
 
-            // Очищаем хранилище перед новым вопросом
+            // Очищаем хранилище перед новым запросом
             lastAnswersByModel = {};
 
+            // Обрати внимание: мы используем index, чтобы ответы не перезаписывали друг друга
             windows.forEach(async (win, index) => {
                 const chatBox = win.querySelector('.ai-chat-box');
                 const select = win.querySelector('.ai-select');
                 
-                // Пропускаем окна саммаризатора (у них нет селекта)
-                if (!select) return; 
+                if (!select) return; // Пропускаем окно саммаризатора
 
                 const model = select.value;
 
-                // Добавляем сообщение юзера
+                // Сообщение юзера
                 const msgUser = document.createElement('div');
                 msgUser.className = 'msg msg-user';
                 msgUser.innerText = text;
                 chatBox.appendChild(msgUser);
                 chatBox.scrollTop = chatBox.scrollHeight;
 
-                // Плашка ожидания
+                // Плашка "Печатает..."
                 const msgAi = document.createElement('div');
                 msgAi.className = 'msg msg-ai';
                 msgAi.innerText = 'Печатает...';
@@ -144,7 +151,7 @@
                     const answerText = data.text || data.answer || 'Пустой ответ';
                     msgAi.innerText = answerText;
 
-                    // Сохраняем ответ по номеру окна (index), чтобы они не стирали друг друга
+                    // Сохраняем ответ по ИНДЕКСУ окна
                     lastAnswersByModel[index] = {
                         provider: "API",
                         model: model,
@@ -152,7 +159,7 @@
                     };
 
                 } catch (err) {
-                    console.error('Ошибка в окне', index, err);
+                    console.error('Ошибка в окне:', err);
                     msgAi.innerText = 'Ошибка соединения.';
                 }
             });
@@ -160,21 +167,22 @@
             input.value = '';
         }
 
-        // --- ФУНКЦИЯ САММАРИЗАТОРА ---
+        // --- 3. САММАРИЗАТОР ---
         async function summarizeAll() {
+            // Собираем сохраненные ответы
             const answersArray = Object.values(lastAnswersByModel);
 
             if (answersArray.length === 0) {
-                alert("Сначала задайте вопрос нейросетям, чтобы было что объединять!");
+                alert("Сначала задайте вопрос нейросетям!");
                 return;
             }
 
-            // Ищем последний вопрос пользователя
+            // Ищем текст вопроса пользователя
             const firstWin = document.querySelector('.ai-window');
             const userMessages = firstWin.querySelectorAll('.msg-user');
             const userQuery = userMessages.length > 0 ? userMessages[userMessages.length - 1].innerText : "Вопрос не найден";
 
-            // Формируем чистый пакет данных
+            // Собираем чистую посылку для n8n
             const payload = {
                 mode: "summary",
                 user_query: userQuery,
@@ -182,6 +190,7 @@
             };
 
             try {
+                // Отправляем в n8n
                 const response = await fetch(N8N_WEBHOOK_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -191,8 +200,8 @@
                 const raw = await response.text();
 
                 if (!response.ok) {
-                    alert(`Саммаризатор: ошибка сервера (${response.status})`);
-                    console.error(raw);
+                    alert(`Саммаризатор: ошибка сервера (${response.status}). Смотри консоль.`);
+                    console.error("Server error:", raw);
                     return;
                 }
 
@@ -200,8 +209,8 @@
                 try {
                     data = JSON.parse(raw);
                 } catch (e) {
-                    alert("Саммаризатор: сервер вернул не JSON");
-                    console.error(raw);
+                    alert("Саммаризатор: сервер вернул не JSON. Смотри консоль.");
+                    console.error("Non-JSON response:", raw);
                     return;
                 }
 
@@ -212,7 +221,7 @@
                 const windows = document.querySelectorAll('.ai-window');
                 const newWin = windows[windows.length - 1];
 
-                // Красиво оформляем заголовок
+                // Оформляем заголовок
                 const select = newWin.querySelector('.ai-select');
                 if (select) {
                     select.outerHTML = '<div style="padding: 10px; font-weight: bold; background: linear-gradient(90deg, #ff8a00, #e52e71); -webkit-background-clip: text; color: transparent;">✨ ИИ-Саммаризатор</div>';
@@ -233,7 +242,7 @@
             }
         }
 
-        // Запускаем 3 окна при загрузке страницы
+        // Старт: открываем 3 окна по умолчанию
         addWindow(); addWindow(); addWindow();
     </script>
 </body>
