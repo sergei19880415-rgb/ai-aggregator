@@ -336,28 +336,27 @@
 
                 const summaryText = data.text || data.answer || "Пустой ответ от сервера";
 
-// 1. Создаем новое окно
-addWindow(); 
+                // 1. Создаем новое окно
+                addWindow(); 
 
-// 2. Находим это новое (последнее) окно
-const windows = document.querySelectorAll('.ai-window');
-const newWin = windows[windows.length - 1];
+                // 2. Находим это новое (последнее) окно
+                const windows = document.querySelectorAll('.ai-window');
+                const newWin = windows[windows.length - 1];
 
-// 3. Красиво оформляем его под Саммаризатор (убираем выбор модели)
-const select = newWin.querySelector('.ai-model-select');
-select.outerHTML = '<div style="padding: 10px; font-weight: bold; background: linear-gradient(90deg, #ff8a00, #e52e71); -webkit-background-clip: text; color: transparent;">✨ ИИ-Саммаризатор</div>';
+                // 3. Красиво оформляем его под Саммаризатор
+                const select = newWin.querySelector('.ai-select');
+                if (select) {
+                    select.outerHTML = '<div style="padding: 10px; font-weight: bold; background: linear-gradient(90deg, #ff8a00, #e52e71); -webkit-background-clip: text; color: transparent;">✨ ИИ-Саммаризатор</div>';
+                }
 
-// 4. Прячем поле ввода, так как это просто итог диалога
-newWin.querySelector('.ai-input-area').style.display = 'none';
+                // 4. Вставляем текст ответа
+                const chatBox = newWin.querySelector('.ai-chat-box');
+                const msgAi = document.createElement('div');
+                msgAi.className = 'msg msg-ai';
+                msgAi.innerText = summaryText;
 
-// 5. Вставляем текст ответа
-const chatBox = newWin.querySelector('.ai-chat-box');
-const msgAi = document.createElement('div');
-msgAi.className = 'msg msg-ai';
-msgAi.innerText = summaryText;
-
-chatBox.appendChild(msgAi);
-chatBox.scrollTop = chatBox.scrollHeight;
+                chatBox.appendChild(msgAi);
+                chatBox.scrollTop = chatBox.scrollHeight;
 
             } catch (err) {
                 console.log("Summary fetch failed:", err, "raw:", raw);
@@ -370,4 +369,5 @@ chatBox.scrollTop = chatBox.scrollHeight;
     </script>
 </body>
 </html>
+
 
