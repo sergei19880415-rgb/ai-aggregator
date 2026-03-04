@@ -291,21 +291,38 @@
         }
 
         // --- САММАРИЗАТОР ---
-        async function summarizeAll() {
-            if (!lastUserQuery) {
-                alert("Сначала задай вопрос 🙂");
+async function summarizeAll() {
+            // 1. Собираем все сохраненные ответы в массив
+            const answersArray = Object.values(lastAnswersByModel);
+
+            // 2. Проверяем, есть ли вообще ответы для саммари
+            if (answersArray.length === 0) {
+                alert("Сначала задайте вопрос нейросетям, чтобы было что объединять!");
                 return;
             }
 
-            const answers = Object.values(lastAnswersByModel)
-                .filter(a => (a && (a.text || "").trim().length > 0));
+            // 3. Достаем текст вопроса пользователя (ищем последнее сообщение юзера в первом окне)
+            const firstWin = document.querySelector('.ai-window');
+            const userMessages = firstWin.querySelectorAll('.msg-user');
+            const userQuery = userMessages.length > 0 ? userMessages[userMessages.length - 1].innerText : "Вопрос не найден";
 
-            if (answers.length === 0) {
-                alert("Сначала дождись ответов моделей 🙂");
-                return;
-            }
+            // 4. Формируем правильную "посылку" для n8n
+            const payload = {
+                mode: "summary",
+                user_query: userQuery,
+                answers: answersArray
+            };
 
-            let raw = "";
+            try {
+                // Отправляем данные на вебхук n8n
+                const response = await fetch(N8N_WEBHOOK_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload) // Вот здесь мы упаковали наш вопрос и ответы!
+                });
+
+                const raw = await response.text();
+              
             try {
                 const response = await fetch(N8N_WEBHOOK_URL, {
                     method: "POST",
@@ -369,6 +386,7 @@
     </script>
 </body>
 </html>
+
 
 
 
