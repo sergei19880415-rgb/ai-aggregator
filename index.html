@@ -290,8 +290,8 @@
             });
         }
 
-        // --- САММАРИЗАТОР ---
-async function summarizeAll() {
+// --- САММАРИЗАТОР ---
+        async function summarizeAll() {
             // 1. Собираем все сохраненные ответы в массив
             const answersArray = Object.values(lastAnswersByModel);
 
@@ -301,12 +301,12 @@ async function summarizeAll() {
                 return;
             }
 
-            // 3. Достаем текст вопроса пользователя (ищем последнее сообщение юзера в первом окне)
+            // 3. Достаем текст вопроса пользователя
             const firstWin = document.querySelector('.ai-window');
             const userMessages = firstWin.querySelectorAll('.msg-user');
             const userQuery = userMessages.length > 0 ? userMessages[userMessages.length - 1].innerText : "Вопрос не найден";
 
-            // 4. Формируем правильную "посылку" для n8n
+            // 4. Формируем правильную "посылку"
             const payload = {
                 mode: "summary",
                 user_query: userQuery,
@@ -318,23 +318,10 @@ async function summarizeAll() {
                 const response = await fetch(N8N_WEBHOOK_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload) // Вот здесь мы упаковали наш вопрос и ответы!
+                    body: JSON.stringify(payload) 
                 });
 
                 const raw = await response.text();
-              
-            try {
-                const response = await fetch(N8N_WEBHOOK_URL, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        mode: "summary",
-                        user_query: lastUserQuery,
-                        answers: answers
-                    })
-                });
-
-                raw = await response.text();
 
                 if (!response.ok) {
                     console.log("Summary HTTP error:", response.status, raw);
@@ -360,7 +347,7 @@ async function summarizeAll() {
                 const windows = document.querySelectorAll('.ai-window');
                 const newWin = windows[windows.length - 1];
 
-                // 3. Красиво оформляем его под Саммаризатор
+                // 3. Красиво оформляем его
                 const select = newWin.querySelector('.ai-select');
                 if (select) {
                     select.outerHTML = '<div style="padding: 10px; font-weight: bold; background: linear-gradient(90deg, #ff8a00, #e52e71); -webkit-background-clip: text; color: transparent;">✨ ИИ-Саммаризатор</div>';
@@ -376,7 +363,7 @@ async function summarizeAll() {
                 chatBox.scrollTop = chatBox.scrollHeight;
 
             } catch (err) {
-                console.log("Summary fetch failed:", err, "raw:", raw);
+                console.log("Summary fetch failed:", err);
                 alert("Саммаризатор: ошибка сети (смотри Console)");
             }
         }
@@ -386,6 +373,7 @@ async function summarizeAll() {
     </script>
 </body>
 </html>
+
 
 
 
