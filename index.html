@@ -220,7 +220,7 @@
             inputField.value = "";
             inputField.style.height = 'auto';
 
-            windows.forEach(async (win) => {
+            windows.forEach(async (win, index) => {
                 const model = win.querySelector('.ai-select').value;
                 const chatBox = win.querySelector('.ai-chat-box');
 
@@ -273,7 +273,7 @@
                     chatBox.scrollTop = chatBox.scrollHeight;
 
                     // Сохраняем для саммаризатора
-                    lastAnswersByModel[model] = {
+                    lastAnswersByModel[index] = {
                         provider: data.provider || guessProvider(model),
                         model: data.model || model,
                         text: answerText
@@ -369,6 +369,7 @@
     </script>
 </body>
 </html>
+
 
 
 
