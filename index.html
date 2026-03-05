@@ -119,6 +119,9 @@
         let lastUserQuery = "";
         let lastAnswersByModel = {}; // key = modelId, value = { provider, model, text }
 
+        // Загружаем историю из памяти браузера (или создаем пустую)
+        let chatHistories = JSON.parse(localStorage.getItem('ai_chat_histories')) || {};
+        
         // Теперь это умный список объектов с ID для сервера и Label для людей
         const models = [
             { id: "gpt-5-nano", label: "GPT-5 Nano" },
@@ -373,3 +376,4 @@
     </script>
 </body>
 </html>
+
