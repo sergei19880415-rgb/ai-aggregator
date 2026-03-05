@@ -126,20 +126,31 @@
         const oldHistory = JSON.parse(localStorage.getItem('ai_chat_histories'));
         if (oldHistory && Object.keys(sessions).length === 0) {
             const id = Date.now().toString();
-            sessions[id] = { title: "Сохраненный чат", histories: oldHistory };
+            sessions[id] = { title: "Сохраненный чат", histories: oldHistory, models: {} };
             currentSessionId = id;
             localStorage.removeItem('ai_chat_histories');
         }
 
         if (Object.keys(sessions).length === 0) {
             const id = Date.now().toString();
-            sessions[id] = { title: "Новый чат", histories: {} };
+            sessions[id] = { title: "Новый чат", histories: {}, models: {} };
             currentSessionId = id;
         } else if (!sessions[currentSessionId]) {
             currentSessionId = Object.keys(sessions)[0];
         }
 
         function saveSessions() {
+            // Сканируем текущие выбранные модели на экране
+            const currentModels = {};
+            document.querySelectorAll('.ai-window').forEach((win, index) => {
+                const select = win.querySelector('.ai-select');
+                if (select) currentModels[index] = select.value;
+            });
+
+            if (sessions[currentSessionId]) {
+                sessions[currentSessionId].models = currentModels;
+            }
+
             localStorage.setItem('ai_sessions', JSON.stringify(sessions));
             localStorage.setItem('ai_current_session', currentSessionId);
             renderSidebar();
@@ -147,18 +158,20 @@
 
         function createNewSession() {
             const id = Date.now().toString();
-            sessions[id] = { title: "Новый чат", histories: {} };
+            // Новый чат автоматически унаследует модели, которые были на экране при сохранении
+            sessions[id] = { title: "Новый чат", histories: {}, models: {} };
             currentSessionId = id;
-            saveSessions();
             
             document.querySelectorAll('.ai-chat-box').forEach(box => box.innerHTML = '');
+            saveSessions();
         }
 
         function loadSession(id) {
             currentSessionId = id;
-            saveSessions();
 
             const chatHistories = sessions[id].histories || {};
+            const loadedModels = sessions[id].models || {}; 
+
             const historyKeys = Object.keys(chatHistories);
             let neededWindows = historyKeys.length > 0 ? historyKeys.length : 3;
             
@@ -166,6 +179,13 @@
 
             const windows = document.querySelectorAll('.ai-window');
             windows.forEach((win, index) => {
+                // Восстанавливаем выбранную модель
+                const select = win.querySelector('.ai-select');
+                if (select && loadedModels[index]) {
+                    select.value = loadedModels[index];
+                }
+
+                // Восстанавливаем чат
                 const chatBox = win.querySelector('.ai-chat-box');
                 chatBox.innerHTML = ''; 
                 
@@ -179,6 +199,8 @@
                     chatBox.scrollTop = chatBox.scrollHeight;
                 }
             });
+            
+            saveSessions();
         }
 
         function renderSidebar() {
@@ -248,7 +270,7 @@
             const optionsHTML = models.map(m => `<option value="${m.id}">${m.label}</option>`).join('');
             win.innerHTML = `
                 <div class="ai-header">
-                    <select class="ai-select">${optionsHTML}</select>
+                    <select class="ai-select" onchange="saveSessions()">${optionsHTML}</select>
                     <button class="icon-btn" onclick="toggleFullscreen(this)" title="Развернуть">⛶</button>
                     <button class="icon-btn close-btn" onclick="removeWindow(this)" title="Закрыть окно">✖</button>
                 </div>
@@ -262,6 +284,7 @@
             container.appendChild(createWindow());
             windowCount++;
             updateLayout();
+            saveSessions(); // Запоминаем модель нового окна
         }
 
         function removeWindow(btn) {
@@ -269,6 +292,7 @@
             btn.closest('.ai-window').remove();
             windowCount--;
             updateLayout();
+            saveSessions(); // Обновляем память после удаления окна
         }
 
         function updateLayout() {
@@ -308,9 +332,8 @@
             const text = inputField.value.trim();
             if (!text) return;
 
-            // МАГИЯ ЗАМЫКАНИЙ: Жестко фиксируем ID сессии, в которой был задан вопрос
             const targetSessionId = currentSessionId;
-            const targetHistories = sessions[targetSessionId].histories;
+            const targetHistories = sessions[targetSessionId].histories = sessions[targetSessionId].histories || {};
 
             if (sessions[targetSessionId].title === "Новый чат") {
                 sessions[targetSessionId].title = text.length > 25 ? text.substring(0, 25) + "..." : text;
@@ -331,7 +354,6 @@
                 const model = select.value;
                 const chatBox = win.querySelector('.ai-chat-box');
 
-                // Отрисовываем "Печатает..."
                 const msgUser = document.createElement('div');
                 msgUser.className = 'msg msg-user';
                 msgUser.innerText = text;
@@ -343,7 +365,6 @@
                 chatBox.appendChild(msgAi);
                 chatBox.scrollTop = chatBox.scrollHeight;
 
-                // Сохраняем вопрос юзера в фоновую историю
                 if (!targetHistories[index]) targetHistories[index] = [];
                 targetHistories[index].push({ role: "user", content: text });
 
@@ -379,17 +400,13 @@
                         } catch (e) { answerText = "Ошибка JSON"; }
                     }
 
-                    // 1. Сохраняем ответ в ПАМЯТЬ ТОГО ЧАТА, ГДЕ БЫЛ ЗАДАН ВОПРОС (Даже если юзер уже ушел)
                     targetHistories[index].push({ role: "assistant", content: answerText });
                     saveSessions(); 
 
-                    // 2. Если юзер ПРЯМО СЕЙЧАС смотрит на этот же чат — обновляем экран
                     if (currentSessionId === targetSessionId) {
-                        // Если "Печатает..." всё еще на экране (не уходил/возвращался)
                         if (document.body.contains(msgAi)) {
                             msgAi.innerText = answerText;
                         } else {
-                            // Если юзер прыгал по чатам, добавляем новое сообщение
                             const activeWindows = document.querySelectorAll('.ai-window');
                             if (activeWindows[index]) {
                                 const activeChatBox = activeWindows[index].querySelector('.ai-chat-box');
@@ -413,7 +430,7 @@
         // --- 4. САММАРИЗАТОР ---
         async function summarizeAll() {
             const targetSessionId = currentSessionId;
-            const targetHistories = sessions[targetSessionId].histories;
+            const targetHistories = sessions[targetSessionId].histories = sessions[targetSessionId].histories || {};
             const answersArray = Object.values(lastAnswersByModel);
 
             if (answersArray.length === 0) {
@@ -455,16 +472,13 @@
 
                 const summaryText = data.text || data.answer || "Пустой ответ от сервера";
                 
-                // Ищем индекс для нового окна саммари
                 const newIndex = Object.keys(targetHistories).length > 0 ? Object.keys(targetHistories).length : 3;
 
-                // Сохраняем Саммари в фоновую историю
                 if (!targetHistories[newIndex]) targetHistories[newIndex] = [];
                 targetHistories[newIndex].push({ role: "user", content: "Общий ответ:" });
                 targetHistories[newIndex].push({ role: "assistant", content: summaryText });
                 saveSessions();
 
-                // Обновляем визуал ТОЛЬКО если мы всё еще в этом чате
                 if (currentSessionId === targetSessionId) {
                     addWindow(); 
                     const windows = document.querySelectorAll('.ai-window');
@@ -498,6 +512,7 @@
     </script>
 </body>
 </html>
+
 
 
 
