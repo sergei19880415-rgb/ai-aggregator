@@ -122,9 +122,7 @@
         // --- 1. СИСТЕМА ПАМЯТИ И СЕССИЙ ---
         let sessions = JSON.parse(localStorage.getItem('ai_sessions')) || {};
         let currentSessionId = localStorage.getItem('ai_current_session');
-        let chatHistories = {}; 
 
-        // Миграция старых данных (чтобы не потерять текущий тест)
         const oldHistory = JSON.parse(localStorage.getItem('ai_chat_histories'));
         if (oldHistory && Object.keys(sessions).length === 0) {
             const id = Date.now().toString();
@@ -133,7 +131,6 @@
             localStorage.removeItem('ai_chat_histories');
         }
 
-        // Если сессий нет вообще — создаем стартовую
         if (Object.keys(sessions).length === 0) {
             const id = Date.now().toString();
             sessions[id] = { title: "Новый чат", histories: {} };
@@ -143,7 +140,6 @@
         }
 
         function saveSessions() {
-            sessions[currentSessionId].histories = chatHistories;
             localStorage.setItem('ai_sessions', JSON.stringify(sessions));
             localStorage.setItem('ai_current_session', currentSessionId);
             renderSidebar();
@@ -153,25 +149,21 @@
             const id = Date.now().toString();
             sessions[id] = { title: "Новый чат", histories: {} };
             currentSessionId = id;
-            chatHistories = sessions[currentSessionId].histories;
             saveSessions();
             
-            // Очищаем экраны, но оставляем окна открытыми
             document.querySelectorAll('.ai-chat-box').forEach(box => box.innerHTML = '');
         }
 
         function loadSession(id) {
             currentSessionId = id;
-            chatHistories = sessions[id].histories || {};
             saveSessions();
 
-            // Проверяем, хватает ли открытых окон для истории
+            const chatHistories = sessions[id].histories || {};
             const historyKeys = Object.keys(chatHistories);
             let neededWindows = historyKeys.length > 0 ? historyKeys.length : 3;
             
             while (windowCount < neededWindows && windowCount < MAX_WINDOWS) addWindow();
 
-            // Очищаем экраны и восстанавливаем сообщения
             const windows = document.querySelectorAll('.ai-window');
             windows.forEach((win, index) => {
                 const chatBox = win.querySelector('.ai-chat-box');
@@ -193,7 +185,6 @@
             const list = document.querySelector('.chat-list');
             list.innerHTML = '';
             
-            // Сортируем: новые сверху
             const sortedIds = Object.keys(sessions).sort((a, b) => b - a);
             
             sortedIds.forEach(id => {
@@ -201,7 +192,6 @@
                 item.className = 'chat-item';
                 item.style.cursor = 'pointer';
                 
-                // Подсветка активного чата
                 if (id === currentSessionId) {
                     item.style.backgroundColor = '#e3f2fd'; 
                     item.style.borderLeft = '4px solid #0078ff';
@@ -215,18 +205,16 @@
                     </div>
                 `;
                 
-                // Переключение чата
                 item.onclick = () => loadSession(id);
                 
-                // Удаление чата
                 item.querySelector('.delete-chat').onclick = (e) => {
-                    e.stopPropagation(); // Чтобы клик не переключил чат
+                    e.stopPropagation(); 
                     if (confirm('Точно удалить этот диалог?')) {
                         delete sessions[id];
                         if (Object.keys(sessions).length === 0) {
-                            createNewSession(); // Если удалили последний, создаем пустой
+                            createNewSession(); 
                         } else if (id === currentSessionId) {
-                            loadSession(Object.keys(sessions)[0]); // Если удалили активный, прыгаем на соседний
+                            loadSession(Object.keys(sessions)[0]); 
                         } else {
                             saveSessions();
                         }
@@ -237,9 +225,7 @@
             });
         }
 
-        // Привязываем кнопку "+ Новый чат"
         document.querySelector('.new-chat-btn').onclick = createNewSession;
-
 
         // --- 2. МОДЕЛИ И ОКНА ---
         const models = [
@@ -301,17 +287,6 @@
             textarea.style.height = (textarea.scrollHeight) + 'px';
         }
 
-        function switchUser() {
-            const targetName = document.getElementById('userName').innerText === "Петя" ? "Мама" : "Петя";
-            const pin = prompt(`Введите PIN для "${targetName}" (тест: 1234):`);
-            if (pin === "1234") {
-                document.getElementById('userName').innerText = targetName;
-                document.getElementById('avatarLetter').innerText = targetName.charAt(0);
-            } else if (pin !== null) {
-                alert("Неверный PIN!");
-            }
-        }
-
         function guessProvider(modelId) {
             const m = (modelId || "").toLowerCase();
             if (m.includes("claude")) return "claude";
@@ -327,24 +302,25 @@
             }
         });
 
-
-        // --- 3. ПАРАЛЛЕЛЬНАЯ ОТПРАВКА ---
+        // --- 3. АСИНХРОННАЯ ОТПРАВКА С ФОНОВОЙ ПАМЯТЬЮ ---
         async function sendMessage() {
             const inputField = document.getElementById("userInput");
             const text = inputField.value.trim();
             if (!text) return;
 
-            // Если это новый чат, берем первые 25 символов для названия в левой панели
-            if (sessions[currentSessionId].title === "Новый чат") {
-                sessions[currentSessionId].title = text.length > 25 ? text.substring(0, 25) + "..." : text;
+            // МАГИЯ ЗАМЫКАНИЙ: Жестко фиксируем ID сессии, в которой был задан вопрос
+            const targetSessionId = currentSessionId;
+            const targetHistories = sessions[targetSessionId].histories;
+
+            if (sessions[targetSessionId].title === "Новый чат") {
+                sessions[targetSessionId].title = text.length > 25 ? text.substring(0, 25) + "..." : text;
                 renderSidebar();
             }
 
             lastUserQuery = text;
             lastAnswersByModel = {}; 
-
+            
             const windows = document.querySelectorAll('.ai-window');
-
             inputField.value = "";
             inputField.style.height = 'auto';
 
@@ -355,11 +331,11 @@
                 const model = select.value;
                 const chatBox = win.querySelector('.ai-chat-box');
 
+                // Отрисовываем "Печатает..."
                 const msgUser = document.createElement('div');
                 msgUser.className = 'msg msg-user';
                 msgUser.innerText = text;
                 chatBox.appendChild(msgUser);
-                chatBox.scrollTop = chatBox.scrollHeight;
 
                 const msgAi = document.createElement('div');
                 msgAi.className = 'msg msg-ai';
@@ -367,12 +343,14 @@
                 chatBox.appendChild(msgAi);
                 chatBox.scrollTop = chatBox.scrollHeight;
 
-                if (!chatHistories[index]) chatHistories[index] = [];
-                chatHistories[index].push({ role: "user", content: text });
+                // Сохраняем вопрос юзера в фоновую историю
+                if (!targetHistories[index]) targetHistories[index] = [];
+                targetHistories[index].push({ role: "user", content: text });
 
-                if (chatHistories[index].length > 20) {
-                    chatHistories[index] = chatHistories[index].slice(-20);
+                if (targetHistories[index].length > 20) {
+                    targetHistories[index] = targetHistories[index].slice(-20);
                 }
+                saveSessions(); 
 
                 try {
                     const response = await fetch(N8N_WEBHOOK_URL, {
@@ -381,46 +359,61 @@
                         body: JSON.stringify({ 
                             user_query: text, 
                             model: model,
-                            history: chatHistories[index] 
+                            history: targetHistories[index] 
                         })
                     });
 
                     const raw = await response.text();
+                    let answerText = "Ошибка ответа сервера";
 
-                    if (!response.ok) {
-                        msgAi.innerText = `Ошибка ответа сервера (${response.status})`;
-                        return;
+                    if (response.ok) {
+                        try {
+                            const data = JSON.parse(raw);
+                            answerText = data.text || data.answer || "Пустой ответ";
+                            
+                            lastAnswersByModel[index] = {
+                                provider: data.provider || guessProvider(model),
+                                model: data.model || model,
+                                text: answerText
+                            };
+                        } catch (e) { answerText = "Ошибка JSON"; }
                     }
 
-                    let data;
-                    try {
-                        data = JSON.parse(raw);
-                    } catch (e) {
-                        msgAi.innerText = "Ошибка: сервер вернул не JSON";
-                        return;
+                    // 1. Сохраняем ответ в ПАМЯТЬ ТОГО ЧАТА, ГДЕ БЫЛ ЗАДАН ВОПРОС (Даже если юзер уже ушел)
+                    targetHistories[index].push({ role: "assistant", content: answerText });
+                    saveSessions(); 
+
+                    // 2. Если юзер ПРЯМО СЕЙЧАС смотрит на этот же чат — обновляем экран
+                    if (currentSessionId === targetSessionId) {
+                        // Если "Печатает..." всё еще на экране (не уходил/возвращался)
+                        if (document.body.contains(msgAi)) {
+                            msgAi.innerText = answerText;
+                        } else {
+                            // Если юзер прыгал по чатам, добавляем новое сообщение
+                            const activeWindows = document.querySelectorAll('.ai-window');
+                            if (activeWindows[index]) {
+                                const activeChatBox = activeWindows[index].querySelector('.ai-chat-box');
+                                const newMsg = document.createElement('div');
+                                newMsg.className = 'msg msg-ai';
+                                newMsg.innerText = answerText;
+                                activeChatBox.appendChild(newMsg);
+                                activeChatBox.scrollTop = activeChatBox.scrollHeight;
+                            }
+                        }
                     }
-
-                    const answerText = data.text || data.answer || "Пустой ответ от сервера";
-                    msgAi.innerText = answerText;
-
-                    lastAnswersByModel[index] = {
-                        provider: data.provider || guessProvider(model),
-                        model: data.model || model,
-                        text: answerText
-                    };
-
-                    chatHistories[index].push({ role: "assistant", content: answerText });
-                    saveSessions(); // Сохраняем в новую систему чатов
 
                 } catch (err) {
-                    msgAi.innerText = "Ошибка сети";
+                    if (currentSessionId === targetSessionId && document.body.contains(msgAi)) {
+                        msgAi.innerText = "Ошибка сети";
+                    }
                 }
             });
         }
 
-
         // --- 4. САММАРИЗАТОР ---
         async function summarizeAll() {
+            const targetSessionId = currentSessionId;
+            const targetHistories = sessions[targetSessionId].histories;
             const answersArray = Object.values(lastAnswersByModel);
 
             if (answersArray.length === 0) {
@@ -448,7 +441,7 @@
                 const raw = await response.text();
 
                 if (!response.ok) {
-                    alert(`Саммаризатор: ошибка сервера (${response.status}). Смотри Console`);
+                    alert(`Саммаризатор: ошибка сервера (${response.status})`);
                     return;
                 }
 
@@ -456,51 +449,56 @@
                 try {
                     data = JSON.parse(raw);
                 } catch (e) {
-                    alert("Саммаризатор: сервер вернул не JSON (смотри Console)");
+                    alert("Саммаризатор: сервер вернул не JSON");
                     return;
                 }
 
                 const summaryText = data.text || data.answer || "Пустой ответ от сервера";
+                
+                // Ищем индекс для нового окна саммари
+                const newIndex = Object.keys(targetHistories).length > 0 ? Object.keys(targetHistories).length : 3;
 
-                addWindow(); 
-                const windows = document.querySelectorAll('.ai-window');
-                const newWin = windows[windows.length - 1];
-                const newIndex = windows.length - 1;
-
-                const select = newWin.querySelector('.ai-select');
-                if (select) {
-                    select.outerHTML = '<div style="padding: 10px; font-weight: bold; background: linear-gradient(90deg, #ff8a00, #e52e71); -webkit-background-clip: text; color: transparent;">✨ ИИ-Саммаризатор</div>';
-                }
-
-                const chatBox = newWin.querySelector('.ai-chat-box');
-                const msgAi = document.createElement('div');
-                msgAi.className = 'msg msg-ai';
-                msgAi.innerText = summaryText;
-
-                chatBox.appendChild(msgAi);
-                chatBox.scrollTop = chatBox.scrollHeight;
-
-                // Сохраняем Саммари в историю текущего чата
-                if (!chatHistories[newIndex]) chatHistories[newIndex] = [];
-                chatHistories[newIndex].push({ role: "user", content: "Общий ответ:" });
-                chatHistories[newIndex].push({ role: "assistant", content: summaryText });
+                // Сохраняем Саммари в фоновую историю
+                if (!targetHistories[newIndex]) targetHistories[newIndex] = [];
+                targetHistories[newIndex].push({ role: "user", content: "Общий ответ:" });
+                targetHistories[newIndex].push({ role: "assistant", content: summaryText });
                 saveSessions();
 
+                // Обновляем визуал ТОЛЬКО если мы всё еще в этом чате
+                if (currentSessionId === targetSessionId) {
+                    addWindow(); 
+                    const windows = document.querySelectorAll('.ai-window');
+                    const newWin = windows[windows.length - 1];
+
+                    const select = newWin.querySelector('.ai-select');
+                    if (select) {
+                        select.outerHTML = '<div style="padding: 10px; font-weight: bold; background: linear-gradient(90deg, #ff8a00, #e52e71); -webkit-background-clip: text; color: transparent;">✨ ИИ-Саммаризатор</div>';
+                    }
+
+                    const chatBox = newWin.querySelector('.ai-chat-box');
+                    const msgAi = document.createElement('div');
+                    msgAi.className = 'msg msg-ai';
+                    msgAi.innerText = summaryText;
+
+                    chatBox.appendChild(msgAi);
+                    chatBox.scrollTop = chatBox.scrollHeight;
+                }
+
             } catch (err) {
-                alert("Саммаризатор: ошибка сети (смотри Console)");
+                alert("Саммаризатор: ошибка сети");
             }
         }
 
         // --- ЗАПУСК ИНТЕРФЕЙСА ПРИ ОТКРЫТИИ САЙТА ---
         if (windowCount === 0) {
-            addWindow(); addWindow(); addWindow(); // Базовые 3 окна
+            addWindow(); addWindow(); addWindow(); 
         }
-        chatHistories = sessions[currentSessionId].histories || {};
-        loadSession(currentSessionId); // Загружаем актуальный чат
+        loadSession(currentSessionId);
         
     </script>
 </body>
 </html>
+
 
 
 
