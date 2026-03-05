@@ -107,7 +107,8 @@
     </div>
 
     <script>
-        // Твоя ссылка на n8n (Production URL)
+        
+        // Твоя ссылка на n8n
         const N8N_WEBHOOK_URL = "https://tgdomen.ru/webhook/3bcfce39-4b24-4493-b3a7-cab0030e8a36";
 
         const container = document.getElementById('workspaceContainer');
@@ -115,14 +116,132 @@
         let windowCount = 0;
         const MAX_WINDOWS = 6;
 
-        // Для саммаризатора: сохраняем последний вопрос и ответы моделей
         let lastUserQuery = "";
-        let lastAnswersByModel = {}; // key = modelId, value = { provider, model, text }
+        let lastAnswersByModel = {}; 
 
-        // Загружаем историю из памяти браузера (или создаем пустую)
-        let chatHistories = JSON.parse(localStorage.getItem('ai_chat_histories')) || {};
-        
-        // Теперь это умный список объектов с ID для сервера и Label для людей
+        // --- 1. СИСТЕМА ПАМЯТИ И СЕССИЙ ---
+        let sessions = JSON.parse(localStorage.getItem('ai_sessions')) || {};
+        let currentSessionId = localStorage.getItem('ai_current_session');
+        let chatHistories = {}; 
+
+        // Миграция старых данных (чтобы не потерять текущий тест)
+        const oldHistory = JSON.parse(localStorage.getItem('ai_chat_histories'));
+        if (oldHistory && Object.keys(sessions).length === 0) {
+            const id = Date.now().toString();
+            sessions[id] = { title: "Сохраненный чат", histories: oldHistory };
+            currentSessionId = id;
+            localStorage.removeItem('ai_chat_histories');
+        }
+
+        // Если сессий нет вообще — создаем стартовую
+        if (Object.keys(sessions).length === 0) {
+            const id = Date.now().toString();
+            sessions[id] = { title: "Новый чат", histories: {} };
+            currentSessionId = id;
+        } else if (!sessions[currentSessionId]) {
+            currentSessionId = Object.keys(sessions)[0];
+        }
+
+        function saveSessions() {
+            sessions[currentSessionId].histories = chatHistories;
+            localStorage.setItem('ai_sessions', JSON.stringify(sessions));
+            localStorage.setItem('ai_current_session', currentSessionId);
+            renderSidebar();
+        }
+
+        function createNewSession() {
+            const id = Date.now().toString();
+            sessions[id] = { title: "Новый чат", histories: {} };
+            currentSessionId = id;
+            chatHistories = sessions[currentSessionId].histories;
+            saveSessions();
+            
+            // Очищаем экраны, но оставляем окна открытыми
+            document.querySelectorAll('.ai-chat-box').forEach(box => box.innerHTML = '');
+        }
+
+        function loadSession(id) {
+            currentSessionId = id;
+            chatHistories = sessions[id].histories || {};
+            saveSessions();
+
+            // Проверяем, хватает ли открытых окон для истории
+            const historyKeys = Object.keys(chatHistories);
+            let neededWindows = historyKeys.length > 0 ? historyKeys.length : 3;
+            
+            while (windowCount < neededWindows && windowCount < MAX_WINDOWS) addWindow();
+
+            // Очищаем экраны и восстанавливаем сообщения
+            const windows = document.querySelectorAll('.ai-window');
+            windows.forEach((win, index) => {
+                const chatBox = win.querySelector('.ai-chat-box');
+                chatBox.innerHTML = ''; 
+                
+                if (chatHistories[index]) {
+                    chatHistories[index].forEach(msg => {
+                        const div = document.createElement('div');
+                        div.className = 'msg ' + (msg.role === 'user' ? 'msg-user' : 'msg-ai');
+                        div.innerText = msg.content;
+                        chatBox.appendChild(div);
+                    });
+                    chatBox.scrollTop = chatBox.scrollHeight;
+                }
+            });
+        }
+
+        function renderSidebar() {
+            const list = document.querySelector('.chat-list');
+            list.innerHTML = '';
+            
+            // Сортируем: новые сверху
+            const sortedIds = Object.keys(sessions).sort((a, b) => b - a);
+            
+            sortedIds.forEach(id => {
+                const item = document.createElement('div');
+                item.className = 'chat-item';
+                item.style.cursor = 'pointer';
+                
+                // Подсветка активного чата
+                if (id === currentSessionId) {
+                    item.style.backgroundColor = '#e3f2fd'; 
+                    item.style.borderLeft = '4px solid #0078ff';
+                    item.style.fontWeight = 'bold';
+                }
+                
+                item.innerHTML = `
+                    <div style="display:flex; justify-content: space-between; align-items: center;">
+                        <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;">${sessions[id].title}</span>
+                        <span class="delete-chat" style="color: #d32f2f; margin-left: 10px; font-weight: bold; cursor: pointer;" title="Удалить">✖</span>
+                    </div>
+                `;
+                
+                // Переключение чата
+                item.onclick = () => loadSession(id);
+                
+                // Удаление чата
+                item.querySelector('.delete-chat').onclick = (e) => {
+                    e.stopPropagation(); // Чтобы клик не переключил чат
+                    if (confirm('Точно удалить этот диалог?')) {
+                        delete sessions[id];
+                        if (Object.keys(sessions).length === 0) {
+                            createNewSession(); // Если удалили последний, создаем пустой
+                        } else if (id === currentSessionId) {
+                            loadSession(Object.keys(sessions)[0]); // Если удалили активный, прыгаем на соседний
+                        } else {
+                            saveSessions();
+                        }
+                    }
+                };
+                
+                list.appendChild(item);
+            });
+        }
+
+        // Привязываем кнопку "+ Новый чат"
+        document.querySelector('.new-chat-btn').onclick = createNewSession;
+
+
+        // --- 2. МОДЕЛИ И ОКНА ---
         const models = [
             { id: "gpt-5-nano", label: "GPT-5 Nano" },
             { id: "gpt-5-mini", label: "GPT-5 Mini" },
@@ -208,54 +327,52 @@
             }
         });
 
-        // --- ПАРАЛЛЕЛЬНАЯ ОТПРАВКА ---
+
+        // --- 3. ПАРАЛЛЕЛЬНАЯ ОТПРАВКА ---
         async function sendMessage() {
             const inputField = document.getElementById("userInput");
             const text = inputField.value.trim();
             if (!text) return;
 
+            // Если это новый чат, берем первые 25 символов для названия в левой панели
+            if (sessions[currentSessionId].title === "Новый чат") {
+                sessions[currentSessionId].title = text.length > 25 ? text.substring(0, 25) + "..." : text;
+                renderSidebar();
+            }
+
             lastUserQuery = text;
-            lastAnswersByModel = {}; // очищаем ответы под новый вопрос
+            lastAnswersByModel = {}; 
 
             const windows = document.querySelectorAll('.ai-window');
 
-            // Очищаем поле ввода сразу
             inputField.value = "";
             inputField.style.height = 'auto';
 
             windows.forEach(async (win, index) => {
                 const select = win.querySelector('.ai-select');
-                if (!select) return; // Пропускаем окно саммаризатора (если оно открыто)
+                if (!select) return; 
 
                 const model = select.value;
                 const chatBox = win.querySelector('.ai-chat-box');
 
-                // 1. Печатаем вопрос юзера на экране
                 const msgUser = document.createElement('div');
                 msgUser.className = 'msg msg-user';
                 msgUser.innerText = text;
                 chatBox.appendChild(msgUser);
                 chatBox.scrollTop = chatBox.scrollHeight;
 
-                // 2. Плашка ожидания "Печатает..."
                 const msgAi = document.createElement('div');
                 msgAi.className = 'msg msg-ai';
                 msgAi.innerText = 'Печатает...';
                 chatBox.appendChild(msgAi);
                 chatBox.scrollTop = chatBox.scrollHeight;
 
-                // --- ЛОГИКА ПАМЯТИ (Начало) ---
-                // Создаем массив для этого окна, если его еще нет
                 if (!chatHistories[index]) chatHistories[index] = [];
-
-                // Добавляем новый вопрос юзера в память
                 chatHistories[index].push({ role: "user", content: text });
 
-                // ОБРЕЗАЕМ ДО 20 ПОСЛЕДНИХ СООБЩЕНИЙ (Скользящее окно)
                 if (chatHistories[index].length > 20) {
                     chatHistories[index] = chatHistories[index].slice(-20);
                 }
-                // --- ЛОГИКА ПАМЯТИ (Конец) ---
 
                 try {
                     const response = await fetch(N8N_WEBHOOK_URL, {
@@ -264,14 +381,13 @@
                         body: JSON.stringify({ 
                             user_query: text, 
                             model: model,
-                            history: chatHistories[index] // <-- ОТПРАВЛЯЕМ ПАМЯТЬ В N8N
+                            history: chatHistories[index] 
                         })
                     });
 
                     const raw = await response.text();
 
                     if (!response.ok) {
-                        console.log("Model HTTP error:", response.status, raw);
                         msgAi.innerText = `Ошибка ответа сервера (${response.status})`;
                         return;
                     }
@@ -280,54 +396,42 @@
                     try {
                         data = JSON.parse(raw);
                     } catch (e) {
-                        console.log("Model non-JSON response:", raw);
                         msgAi.innerText = "Ошибка: сервер вернул не JSON";
                         return;
                     }
 
                     const answerText = data.text || data.answer || "Пустой ответ от сервера";
-
-                    // Заменяем текст "Печатает..." на реальный ответ
                     msgAi.innerText = answerText;
 
-                    // Сохраняем для саммаризатора
                     lastAnswersByModel[index] = {
                         provider: data.provider || guessProvider(model),
                         model: data.model || model,
                         text: answerText
                     };
 
-                    // --- СОХРАНЕНИЕ ОТВЕТА ИИ В ПАМЯТЬ ---
                     chatHistories[index].push({ role: "assistant", content: answerText });
-                    
-                    // Сохраняем обновленную историю на жесткий диск
-                    localStorage.setItem('ai_chat_histories', JSON.stringify(chatHistories));
-                    // -------------------------------------
+                    saveSessions(); // Сохраняем в новую систему чатов
 
                 } catch (err) {
-                    console.error("Ошибка сети в одном из окон:", err);
                     msgAi.innerText = "Ошибка сети";
                 }
             });
         }
 
-        // --- САММАРИЗАТОР ---
+
+        // --- 4. САММАРИЗАТОР ---
         async function summarizeAll() {
-            // 1. Собираем все сохраненные ответы в массив
             const answersArray = Object.values(lastAnswersByModel);
 
-            // 2. Проверяем, есть ли вообще ответы для саммари
             if (answersArray.length === 0) {
                 alert("Сначала задайте вопрос нейросетям, чтобы было что объединять!");
                 return;
             }
 
-            // 3. Достаем текст вопроса пользователя (ищем последнее сообщение юзера в первом окне)
             const firstWin = document.querySelector('.ai-window');
             const userMessages = firstWin.querySelectorAll('.msg-user');
             const userQuery = userMessages.length > 0 ? userMessages[userMessages.length - 1].innerText : "Вопрос не найден";
 
-            // 4. Формируем правильную "посылку" для n8n
             const payload = {
                 mode: "summary",
                 user_query: userQuery,
@@ -335,7 +439,6 @@
             };
 
             try {
-                // Отправляем данные на вебхук n8n
                 const response = await fetch(N8N_WEBHOOK_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -345,7 +448,6 @@
                 const raw = await response.text();
 
                 if (!response.ok) {
-                    console.log("Summary HTTP error:", response.status, raw);
                     alert(`Саммаризатор: ошибка сервера (${response.status}). Смотри Console`);
                     return;
                 }
@@ -354,27 +456,22 @@
                 try {
                     data = JSON.parse(raw);
                 } catch (e) {
-                    console.log("Summary non-JSON:", raw);
                     alert("Саммаризатор: сервер вернул не JSON (смотри Console)");
                     return;
                 }
 
                 const summaryText = data.text || data.answer || "Пустой ответ от сервера";
 
-                // 1. Создаем новое окно
                 addWindow(); 
-
-                // 2. Находим это новое (последнее) окно
                 const windows = document.querySelectorAll('.ai-window');
                 const newWin = windows[windows.length - 1];
+                const newIndex = windows.length - 1;
 
-                // 3. Красиво оформляем его под Саммаризатор
                 const select = newWin.querySelector('.ai-select');
                 if (select) {
                     select.outerHTML = '<div style="padding: 10px; font-weight: bold; background: linear-gradient(90deg, #ff8a00, #e52e71); -webkit-background-clip: text; color: transparent;">✨ ИИ-Саммаризатор</div>';
                 }
 
-                // 4. Вставляем текст ответа
                 const chatBox = newWin.querySelector('.ai-chat-box');
                 const msgAi = document.createElement('div');
                 msgAi.className = 'msg msg-ai';
@@ -383,16 +480,27 @@
                 chatBox.appendChild(msgAi);
                 chatBox.scrollTop = chatBox.scrollHeight;
 
+                // Сохраняем Саммари в историю текущего чата
+                if (!chatHistories[newIndex]) chatHistories[newIndex] = [];
+                chatHistories[newIndex].push({ role: "user", content: "Общий ответ:" });
+                chatHistories[newIndex].push({ role: "assistant", content: summaryText });
+                saveSessions();
+
             } catch (err) {
-                console.log("Summary fetch failed:", err);
                 alert("Саммаризатор: ошибка сети (смотри Console)");
             }
         }
 
-        // Старт: 3 окна
-        addWindow(); addWindow(); addWindow();
+        // --- ЗАПУСК ИНТЕРФЕЙСА ПРИ ОТКРЫТИИ САЙТА ---
+        if (windowCount === 0) {
+            addWindow(); addWindow(); addWindow(); // Базовые 3 окна
+        }
+        chatHistories = sessions[currentSessionId].histories || {};
+        loadSession(currentSessionId); // Загружаем актуальный чат
+        
     </script>
 </body>
 </html>
+
 
 
