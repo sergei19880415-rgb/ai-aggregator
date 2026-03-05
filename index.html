@@ -108,7 +108,7 @@
 
     <script>
         
-        // Твоя ссылка на n8n
+       // Твоя ссылка на n8n
         const N8N_WEBHOOK_URL = "https://tgdomen.ru/webhook/3bcfce39-4b24-4493-b3a7-cab0030e8a36";
 
         const container = document.getElementById('workspaceContainer');
@@ -118,6 +118,9 @@
 
         let lastUserQuery = "";
         let lastAnswersByModel = {}; 
+        
+        // Предохранитель, чтобы окна не перезаписывали модели при загрузке
+        let isLoading = false; 
 
         // --- 1. СИСТЕМА ПАМЯТИ И СЕССИЙ ---
         let sessions = JSON.parse(localStorage.getItem('ai_sessions')) || {};
@@ -140,7 +143,8 @@
         }
 
         function saveSessions() {
-            // Сканируем текущие выбранные модели на экране
+            if (isLoading) return; // Блокируем сохранение, пока идет отрисовка окон!
+
             const currentModels = {};
             document.querySelectorAll('.ai-window').forEach((win, index) => {
                 const select = win.querySelector('.ai-select');
@@ -158,8 +162,15 @@
 
         function createNewSession() {
             const id = Date.now().toString();
-            // Новый чат автоматически унаследует модели, которые были на экране при сохранении
-            sessions[id] = { title: "Новый чат", histories: {}, models: {} };
+            
+            // Запоминаем текущие модели, чтобы перенести их в новый чат
+            const currentModels = {};
+            document.querySelectorAll('.ai-window').forEach((win, index) => {
+                const select = win.querySelector('.ai-select');
+                if (select) currentModels[index] = select.value;
+            });
+
+            sessions[id] = { title: "Новый чат", histories: {}, models: currentModels };
             currentSessionId = id;
             
             document.querySelectorAll('.ai-chat-box').forEach(box => box.innerHTML = '');
@@ -167,6 +178,7 @@
         }
 
         function loadSession(id) {
+            isLoading = true; // Включаем предохранитель
             currentSessionId = id;
 
             const chatHistories = sessions[id].histories || {};
@@ -179,7 +191,7 @@
 
             const windows = document.querySelectorAll('.ai-window');
             windows.forEach((win, index) => {
-                // Восстанавливаем выбранную модель
+                // Восстанавливаем выбранную модель ДО сохранения
                 const select = win.querySelector('.ai-select');
                 if (select && loadedModels[index]) {
                     select.value = loadedModels[index];
@@ -200,7 +212,8 @@
                 }
             });
             
-            saveSessions();
+            isLoading = false; // Выключаем предохранитель
+            saveSessions(); // Теперь безопасно сохраняем
         }
 
         function renderSidebar() {
@@ -284,7 +297,7 @@
             container.appendChild(createWindow());
             windowCount++;
             updateLayout();
-            saveSessions(); // Запоминаем модель нового окна
+            saveSessions(); 
         }
 
         function removeWindow(btn) {
@@ -292,7 +305,7 @@
             btn.closest('.ai-window').remove();
             windowCount--;
             updateLayout();
-            saveSessions(); // Обновляем память после удаления окна
+            saveSessions(); 
         }
 
         function updateLayout() {
@@ -512,6 +525,7 @@
     </script>
 </body>
 </html>
+
 
 
 
