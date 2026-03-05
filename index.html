@@ -224,32 +224,55 @@
             inputField.style.height = 'auto';
 
             windows.forEach(async (win, index) => {
-                const model = win.querySelector('.ai-select').value;
+                const select = win.querySelector('.ai-select');
+                if (!select) return; // Пропускаем окно саммаризатора (если оно открыто)
+
+                const model = select.value;
                 const chatBox = win.querySelector('.ai-chat-box');
 
-                // Печатаем вопрос в текущем окне
+                // 1. Печатаем вопрос юзера на экране
                 const msgUser = document.createElement('div');
                 msgUser.className = 'msg msg-user';
                 msgUser.innerText = text;
                 chatBox.appendChild(msgUser);
                 chatBox.scrollTop = chatBox.scrollHeight;
 
+                // 2. Плашка ожидания "Печатает..."
+                const msgAi = document.createElement('div');
+                msgAi.className = 'msg msg-ai';
+                msgAi.innerText = 'Печатает...';
+                chatBox.appendChild(msgAi);
+                chatBox.scrollTop = chatBox.scrollHeight;
+
+                // --- ЛОГИКА ПАМЯТИ (Начало) ---
+                // Создаем массив для этого окна, если его еще нет
+                if (!chatHistories[index]) chatHistories[index] = [];
+
+                // Добавляем новый вопрос юзера в память
+                chatHistories[index].push({ role: "user", content: text });
+
+                // ОБРЕЗАЕМ ДО 20 ПОСЛЕДНИХ СООБЩЕНИЙ (Скользящее окно)
+                if (chatHistories[index].length > 20) {
+                    chatHistories[index] = chatHistories[index].slice(-20);
+                }
+                // --- ЛОГИКА ПАМЯТИ (Конец) ---
+
                 try {
                     const response = await fetch(N8N_WEBHOOK_URL, {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ user_query: text, model: model })
+                        body: JSON.stringify({ 
+                            user_query: text, 
+                            model: model,
+                            history: chatHistories[index] // <-- ОТПРАВЛЯЕМ ПАМЯТЬ В N8N
+                        })
                     });
 
                     const raw = await response.text();
 
                     if (!response.ok) {
                         console.log("Model HTTP error:", response.status, raw);
-                        const msgAi = document.createElement('div');
-                        msgAi.className = 'msg msg-ai';
                         msgAi.innerText = `Ошибка ответа сервера (${response.status})`;
-                        chatBox.appendChild(msgAi);
-                        chatBox.scrollTop = chatBox.scrollHeight;
                         return;
                     }
 
@@ -258,22 +281,14 @@
                         data = JSON.parse(raw);
                     } catch (e) {
                         console.log("Model non-JSON response:", raw);
-                        const msgAi = document.createElement('div');
-                        msgAi.className = 'msg msg-ai';
                         msgAi.innerText = "Ошибка: сервер вернул не JSON";
-                        chatBox.appendChild(msgAi);
-                        chatBox.scrollTop = chatBox.scrollHeight;
                         return;
                     }
 
                     const answerText = data.text || data.answer || "Пустой ответ от сервера";
 
-                    // Печатаем ответ
-                    const msgAi = document.createElement('div');
-                    msgAi.className = 'msg msg-ai';
+                    // Заменяем текст "Печатает..." на реальный ответ
                     msgAi.innerText = answerText;
-                    chatBox.appendChild(msgAi);
-                    chatBox.scrollTop = chatBox.scrollHeight;
 
                     // Сохраняем для саммаризатора
                     lastAnswersByModel[index] = {
@@ -282,13 +297,16 @@
                         text: answerText
                     };
 
+                    // --- СОХРАНЕНИЕ ОТВЕТА ИИ В ПАМЯТЬ ---
+                    chatHistories[index].push({ role: "assistant", content: answerText });
+                    
+                    // Сохраняем обновленную историю на жесткий диск
+                    localStorage.setItem('ai_chat_histories', JSON.stringify(chatHistories));
+                    // -------------------------------------
+
                 } catch (err) {
                     console.error("Ошибка сети в одном из окон:", err);
-                    const msgAi = document.createElement('div');
-                    msgAi.className = 'msg msg-ai';
                     msgAi.innerText = "Ошибка сети";
-                    chatBox.appendChild(msgAi);
-                    chatBox.scrollTop = chatBox.scrollHeight;
                 }
             });
         }
@@ -376,4 +394,5 @@
     </script>
 </body>
 </html>
+
 
