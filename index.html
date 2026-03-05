@@ -517,14 +517,16 @@
         }
 
         // --- ЗАПУСК ИНТЕРФЕЙСА ПРИ ОТКРЫТИИ САЙТА ---
+        isLoading = true; // Блокируем автосохранение при первой отрисовке
         if (windowCount === 0) {
             addWindow(); addWindow(); addWindow(); 
         }
-        loadSession(currentSessionId);
+        loadSession(currentSessionId); // Внутри этой функции isLoading выключится сам
         
     </script>
 </body>
 </html>
+
 
 
 
