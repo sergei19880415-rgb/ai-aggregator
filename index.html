@@ -89,8 +89,8 @@
 
     <div class="sidebar">
         <div class="user-profile" onclick="switchUser()">
-            <div class="user-avatar" id="avatarLetter">П</div>
-            <div class="user-name" id="userName">Петя</div>
+            <div class="user-avatar" id="avatarLetter">?</div>
+            <div class="user-name" id="userName">Войти</div>
             <div style="color: #888; font-size: 12px;">▼</div>
         </div>
         <button class="new-chat-btn">+ Новый чат</button>
@@ -112,6 +112,16 @@
         <div class="input-area">
             <textarea class="chat-input" id="userInput" placeholder="Введите ваш промпт (Enter для отправки, Shift+Enter для переноса)..." rows="1" oninput="autoResize(this)"></textarea>
             <button class="send-btn" onclick="sendMessage()">➤</button>
+        </div>
+    </div>
+
+    <div id="loginModal" class="modal hidden">
+        <div class="modal-card" onclick="event.stopPropagation()">
+            <div class="modal-title">Вход</div>
+            <input id="loginEmail" placeholder="Email" autocomplete="username">
+            <input id="loginPassword" type="password" placeholder="Пароль" autocomplete="current-password">
+            <button onclick="doLogin()">Войти</button>
+            <div id="loginError" class="modal-error"></div>
         </div>
     </div>
 
@@ -343,8 +353,93 @@
             return "openai";
         }
         
+        function applyAuthToUI() {
+            const nameEl = document.getElementById('userName');
+            const avatarEl = document.getElementById('avatarLetter');
+
+            if (!auth) {
+                nameEl.innerText = "Войти";
+                avatarEl.innerText = "?";
+                return;
+            }
+
+            const fullName = `${auth.firstName || ""} ${auth.lastName || ""}`.trim();
+            nameEl.innerText = fullName || auth.email || "Пользователь";
+            avatarEl.innerText = (auth.firstName || auth.email || "?").toString().trim().charAt(0).toUpperCase();
+        }
+
+        function openLoginModal() {
+            const modal = document.getElementById('loginModal');
+            const errEl = document.getElementById('loginError');
+
+            modal.classList.remove('hidden');
+            errEl.innerText = "";
+            document.getElementById('loginPassword').value = "";
+
+            if (auth?.email) {
+                document.getElementById('loginEmail').value = auth.email;
+            }
+        }
+
+        function closeLoginModal() {
+            document.getElementById('loginModal').classList.add('hidden');
+        }
+
         function switchUser() {
-            alert("Смена пользователя будет следующим этапом");
+            openLoginModal();
+        }
+
+        async function doLogin() {
+            const email = document.getElementById('loginEmail').value.trim();
+            const password = document.getElementById('loginPassword').value;
+            const errEl = document.getElementById('loginError');
+
+            errEl.innerText = "";
+
+            if (!email || !password) {
+                errEl.innerText = "Введите email и пароль";
+                return;
+            }
+
+            try {
+                const r = await fetch(N8N_LOGIN_URL, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ email, password })
+                });
+
+                const raw = await r.text();
+                let data = null;
+
+                try {
+                    data = JSON.parse(raw);
+                } catch (e) {
+                    errEl.innerText = "Сервер вернул некорректный ответ";
+                    return;
+                }
+
+                if (!r.ok || !data.success) {
+                    errEl.innerText = data.message || `Ошибка входа (${r.status})`;
+                    return;
+                }
+
+                auth = data;
+                localStorage.setItem('ai_auth', JSON.stringify(auth));
+                applyAuthToUI();
+                closeLoginModal();
+            } catch (e) {
+                errEl.innerText = "Ошибка сети или CORS";
+            }
+        }
+
+        function trimHistoryToPlan(historyArray) {
+            const frontHistoryLimit = Number(auth?.maxMessages || 20);
+
+            if (historyArray.length > frontHistoryLimit) {
+                return historyArray.slice(-frontHistoryLimit);
+            }
+
+            return historyArray;
         }
         // --- ENTER ---
         document.getElementById("userInput").addEventListener("keydown", function(e) {
@@ -358,6 +453,12 @@
         async function sendMessage() {
             const inputField = document.getElementById("userInput");
             const text = inputField.value.trim();
+
+            if (!auth?.email) {
+                openLoginModal();
+                return;
+            }
+
             if (!text) return;
 
             const targetSessionId = currentSessionId;
@@ -395,10 +496,7 @@
 
                 if (!targetHistories[index]) targetHistories[index] = [];
                 targetHistories[index].push({ role: "user", content: text });
-
-                if (targetHistories[index].length > 20) {
-                    targetHistories[index] = targetHistories[index].slice(-20);
-                }
+                targetHistories[index] = trimHistoryToPlan(targetHistories[index]);
                 saveSessions(); 
 
                 try {
@@ -406,11 +504,11 @@
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({ 
-                        user_email: CURRENT_USER_EMAIL,
-                        user_query: text, 
-                        model: model,
-                        history: targetHistories[index] 
-                    })
+                            user_email: auth.email,
+                            user_query: text, 
+                            model: model,
+                            history: targetHistories[index] 
+                        })
                     });
 
                     const raw = await response.text();
@@ -430,6 +528,7 @@
                     }
 
                     targetHistories[index].push({ role: "assistant", content: answerText });
+                    targetHistories[index] = trimHistoryToPlan(targetHistories[index]);
                     saveSessions(); 
 
                     if (currentSessionId === targetSessionId) {
@@ -458,6 +557,11 @@
 
         // --- 4. САММАРИЗАТОР ---
         async function summarizeAll() {
+            if (!auth?.email) {
+                openLoginModal();
+                return;
+            }
+
             const targetSessionId = currentSessionId;
             const targetHistories = sessions[targetSessionId].histories = sessions[targetSessionId].histories || {};
             const answersArray = Object.values(lastAnswersByModel);
@@ -473,7 +577,7 @@
 
             const payload = {
                 mode: "summary",
-                user_email: CURRENT_USER_EMAIL,
+                user_email: auth.email,
                 user_query: userQuery,
                 answers: answersArray
             };
@@ -547,25 +651,5 @@
             openLoginModal();
         }
     </script>
-    
-    <div id="loginModal" class="modal hidden">
-    <div class="modal-card" onclick="event.stopPropagation()">
-        <div class="modal-title">Вход</div>
-        <input id="loginEmail" placeholder="Email" autocomplete="username">
-        <input id="loginPassword" type="password" placeholder="Пароль" autocomplete="current-password">
-        <button onclick="doLogin()">Войти</button>
-        <div id="loginError" class="modal-error"></div>
-    </div>
-</div>
-    
 </body>
 </html>
-
-
-
-
-
-
-
-
-
