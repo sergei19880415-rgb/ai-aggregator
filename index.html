@@ -110,6 +110,7 @@
         
        // Твоя ссылка на n8n
         const N8N_WEBHOOK_URL = "https://tgdomen.ru/webhook/3bcfce39-4b24-4493-b3a7-cab0030e8a36";
+        const CURRENT_USER_EMAIL = "Sergei19880415@gmail.com";
 
         const container = document.getElementById('workspaceContainer');
         const counterText = document.getElementById('windowCounter');
@@ -330,7 +331,10 @@
             if (m.includes("gemini")) return "gemini";
             return "openai";
         }
-
+        
+        function switchUser() {
+            alert("Смена пользователя будет следующим этапом");
+        }
         // --- ENTER ---
         document.getElementById("userInput").addEventListener("keydown", function(e) {
             if (e.key === "Enter" && !e.shiftKey) {
@@ -391,10 +395,11 @@
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({ 
-                            user_query: text, 
-                            model: model,
-                            history: targetHistories[index] 
-                        })
+                        user_email: CURRENT_USER_EMAIL,
+                        user_query: text, 
+                        model: model,
+                        history: targetHistories[index] 
+                    })
                     });
 
                     const raw = await response.text();
@@ -457,6 +462,7 @@
 
             const payload = {
                 mode: "summary",
+                user_email: CURRENT_USER_EMAIL,
                 user_query: userQuery,
                 answers: answersArray
             };
@@ -526,6 +532,7 @@
     </script>
 </body>
 </html>
+
 
 
 
