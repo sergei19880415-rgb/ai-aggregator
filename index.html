@@ -74,6 +74,15 @@
 
         /* РЕЖИМ НА ВЕСЬ ЭКРАН */
         .ai-window.fullscreen { position: absolute; top: 0; left: 0; width: 100% !important; height: 100% !important; z-index: 100; border-radius: 0; }
+
+        .modal { position: fixed; inset: 0; background: rgba(0,0,0,.35); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+        .modal.hidden { display: none; }
+        .modal-card { width: 360px; background: #fff; border-radius: 12px; padding: 18px; box-shadow: 0 10px 30px rgba(0,0,0,.15); }
+        .modal-title { font-weight: 700; margin-bottom: 10px; }
+        .modal-card input { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 8px; margin-top: 8px; }
+        .modal-card button { width: 100%; margin-top: 12px; padding: 10px; background: #4CAF50; color: #fff; border-radius: 8px; font-weight: 700; }
+        .modal-error { color: #d32f2f; font-size: 13px; margin-top: 8px; min-height: 16px; }
+        
     </style>
 </head>
 <body>
@@ -110,7 +119,9 @@
         
        // Твоя ссылка на n8n
         const N8N_WEBHOOK_URL = "https://tgdomen.ru/webhook/3bcfce39-4b24-4493-b3a7-cab0030e8a36";
-        const CURRENT_USER_EMAIL = "Sergei19880415@gmail.com";
+        const N8N_LOGIN_URL = "https://tgdomen.ru/webhook/login-auth";
+        
+        let auth = JSON.parse(localStorage.getItem('ai_auth') || 'null');
 
         const container = document.getElementById('workspaceContainer');
         const counterText = document.getElementById('windowCounter');
@@ -528,10 +539,28 @@
             addWindow(); addWindow(); addWindow(); 
         }
         loadSession(currentSessionId); // Внутри этой функции isLoading выключится сам
+         applyAuthToUI();
+    
+        document.getElementById('loginModal').addEventListener('click', closeLoginModal);
         
+        if (!auth) {
+            openLoginModal();
+        }
     </script>
+    
+    <div id="loginModal" class="modal hidden">
+    <div class="modal-card" onclick="event.stopPropagation()">
+        <div class="modal-title">Вход</div>
+        <input id="loginEmail" placeholder="Email" autocomplete="username">
+        <input id="loginPassword" type="password" placeholder="Пароль" autocomplete="current-password">
+        <button onclick="doLogin()">Войти</button>
+        <div id="loginError" class="modal-error"></div>
+    </div>
+</div>
+    
 </body>
 </html>
+
 
 
 
