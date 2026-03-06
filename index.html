@@ -5,44 +5,40 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Агрегатор Pro</title>
     <style>
-        /* БАЗОВЫЕ СТИЛИ */
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Arial, sans-serif; }
         body { display: flex; height: 100vh; overflow: hidden; background-color: #f0f2f5; color: #333; }
         button { cursor: pointer; border: none; outline: none; transition: 0.2s; }
 
-        /* ЛЕВАЯ ПАНЕЛЬ */
-        .sidebar { width: 260px; background-color: #ffffff; border-right: 1px solid #e0e0e0; display: flex; flex-direction: column; z-index: 10; }
-
+        .sidebar { width: 260px; background-color: #ffffff; border-right: 1px solid #e0e0e0; display: flex; flex-direction: column; z-index: 10; position: relative; }
         .user-profile { padding: 20px 15px; border-bottom: 1px solid #e0e0e0; display: flex; align-items: center; justify-content: space-between; background: #f9f9f9; cursor: pointer; }
         .user-profile:hover { background: #f1f1f1; }
         .user-avatar { width: 35px; height: 35px; background: #888; color: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; }
         .user-name { flex: 1; margin-left: 10px; font-weight: bold; }
 
+        .login-popover { margin: 10px 12px 0; padding: 12px; background: #fff; border: 1px solid #d9d9d9; border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,0.08); }
+        .login-popover.hidden { display: none; }
+        .login-title { font-size: 14px; font-weight: 700; margin-bottom: 8px; }
+        .login-popover input { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 8px; margin-top: 8px; font-size: 14px; }
+        .login-actions { display: flex; gap: 8px; margin-top: 10px; }
+        .login-ok { flex: 1; padding: 9px 10px; background: #4CAF50; color: #fff; border-radius: 8px; font-weight: 700; }
+        .login-cancel { flex: 1; padding: 9px 10px; background: #f3f4f6; color: #333; border: 1px solid #d1d5db; border-radius: 8px; font-weight: 700; }
+        .login-error { color: #d32f2f; font-size: 12px; margin-top: 8px; min-height: 16px; }
+
         .new-chat-btn { margin: 15px; padding: 12px; background-color: #4CAF50; color: white; border-radius: 8px; font-weight: bold; font-size: 15px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
         .new-chat-btn:hover { background-color: #45a049; }
-
         .history-title { padding: 0 15px; font-size: 12px; color: #888; text-transform: uppercase; font-weight: bold; margin-bottom: 5px; }
         .chat-list { flex: 1; overflow-y: auto; padding: 0 10px 10px 10px; }
         .chat-item { padding: 10px; margin-bottom: 5px; background: #fff; border-radius: 6px; cursor: pointer; font-size: 14px; color: #444; }
         .chat-item:hover { background: #f0f0f0; }
 
-        /* ОСНОВНАЯ ЗОНА */
         .main-area { flex: 1; display: flex; flex-direction: column; position: relative; }
-
-        /* ВЕРХНЯЯ ПАНЕЛЬ УПРАВЛЕНИЯ */
         .top-bar { height: 60px; background: #fff; border-bottom: 1px solid #e0e0e0; display: flex; align-items: center; padding: 0 20px; gap: 15px; }
-        .add-ai-btn { padding: 8px 15px; background: #fff; border: 1px solid #ccc; border-radius: 6px; font-weight: bold; }
-        .add-ai-btn:hover { background: #f0f0f0; }
-        .summary-btn { padding: 8px 15px; background: #fff; border: 1px solid #ccc; border-radius: 6px; font-weight: bold; display: flex; align-items: center; gap: 5px; }
-        .summary-btn:hover { background: #f0f0f0; }
+        .add-ai-btn, .summary-btn { padding: 8px 15px; background: #fff; border: 1px solid #ccc; border-radius: 6px; font-weight: bold; }
+        .add-ai-btn:hover, .summary-btn:hover { background: #f0f0f0; }
         .window-counter { color: #888; font-size: 14px; margin-left: auto; }
 
-        /* СЕТКА ОКОН ИИ */
         .workspaces { flex: 1; padding: 15px; overflow-y: auto; display: flex; flex-wrap: wrap; align-content: flex-start; gap: 15px; }
-
         .ai-window { display: flex; flex-direction: column; background: #fff; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); overflow: hidden; transition: 0.3s all; height: 100%; min-height: 300px; border: 1px solid #e0e0e0; }
-
-        /* Размеры окон */
         .workspaces[data-count="1"] .ai-window { width: 100%; height: 100%; }
         .workspaces[data-count="2"] .ai-window { width: calc(50% - 7.5px); height: 100%; }
         .workspaces[data-count="3"] .ai-window { width: calc(33.333% - 10px); height: 100%; }
@@ -59,36 +55,40 @@
         .close-btn:hover { background: #ffebee; color: #d32f2f; }
 
         .ai-chat-box { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 12px; background: #fff; }
-
-        /* Стили сообщений */
         .msg { padding: 10px 14px; border-radius: 8px; font-size: 15px; line-height: 1.4; max-width: 90%; white-space: pre-wrap; }
         .msg-user { background-color: #e3f2fd; border: 1px solid #bbdefb; align-self: flex-end; }
         .msg-ai { background-color: #f5f5f5; border: 1px solid #e0e0e0; align-self: flex-start; }
 
-        /* ПОЛЕ ВВОДА ВНИЗУ */
         .input-area { padding: 20px; background: #fff; border-top: 1px solid #e0e0e0; display: flex; gap: 15px; align-items: flex-end; }
         .chat-input { flex: 1; min-height: 50px; max-height: 200px; padding: 14px; border: 1px solid #ccc; border-radius: 12px; font-size: 15px; resize: none; overflow-y: auto; line-height: 1.4; outline: none; background: #f9f9f9; transition: border 0.2s; }
         .chat-input:focus { border-color: #888; background: #fff; }
         .send-btn { width: 50px; height: 50px; border-radius: 12px; background: #888; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; }
         .send-btn:hover { background: #666; }
-
-        /* РЕЖИМ НА ВЕСЬ ЭКРАН */
         .ai-window.fullscreen { position: absolute; top: 0; left: 0; width: 100% !important; height: 100% !important; z-index: 100; border-radius: 0; }
     </style>
 </head>
 <body>
-
     <div class="sidebar">
         <div class="user-profile" onclick="switchUser()">
             <div class="user-avatar" id="avatarLetter">?</div>
             <div class="user-name" id="userName">Войти</div>
             <div style="color: #888; font-size: 12px;">▼</div>
         </div>
+
+        <div id="loginPopover" class="login-popover hidden">
+            <div class="login-title">Вход</div>
+            <input id="loginEmail" placeholder="Email" autocomplete="username">
+            <input id="loginPassword" type="password" placeholder="Пароль" autocomplete="current-password">
+            <div class="login-actions">
+                <button class="login-ok" onclick="doLogin()">Ок</button>
+                <button class="login-cancel" onclick="closeLoginPopover()">Отмена</button>
+            </div>
+            <div id="loginError" class="login-error"></div>
+        </div>
+
         <button class="new-chat-btn">+ Новый чат</button>
         <div class="history-title">История чатов</div>
-        <div class="chat-list">
-            <div class="chat-item">Тестовый чат 1</div>
-        </div>
+        <div class="chat-list"><div class="chat-item">Тестовый чат 1</div></div>
     </div>
 
     <div class="main-area">
@@ -97,45 +97,28 @@
             <button class="summary-btn" onclick="summarizeAll()">✨ Общий ответ</button>
             <div class="window-counter" id="windowCounter">Окон: 3 из 6</div>
         </div>
-
         <div class="workspaces" id="workspaceContainer" data-count="3"></div>
-
         <div class="input-area">
             <textarea class="chat-input" id="userInput" placeholder="Введите ваш промпт (Enter для отправки, Shift+Enter для переноса)..." rows="1" oninput="autoResize(this)"></textarea>
             <button class="send-btn" onclick="sendMessage()">➤</button>
         </div>
     </div>
 
-    <div id="loginModal" class="modal hidden">
-        <div class="modal-card" onclick="event.stopPropagation()">
-            <div class="modal-title">Вход</div>
-            <input id="loginEmail" placeholder="Email" autocomplete="username">
-            <input id="loginPassword" type="password" placeholder="Пароль" autocomplete="current-password">
-            <button onclick="doLogin()">Войти</button>
-            <div id="loginError" class="modal-error"></div>
-        </div>
-    </div>
-
     <script>
-        
-       // Твоя ссылка на n8n
         const N8N_WEBHOOK_URL = "https://tgdomen.ru/webhook/3bcfce39-4b24-4493-b3a7-cab0030e8a36";
+        const N8N_LOGIN_URL = "https://tgdomen.ru/webhook/login-auth";
+        let auth = JSON.parse(localStorage.getItem('ai_auth') || 'null');
 
         const container = document.getElementById('workspaceContainer');
         const counterText = document.getElementById('windowCounter');
         let windowCount = 0;
         const MAX_WINDOWS = 6;
-
         let lastUserQuery = "";
-        let lastAnswersByModel = {}; 
-        
-        // Предохранитель, чтобы окна не перезаписывали модели при загрузке
-        let isLoading = false; 
+        let lastAnswersByModel = {};
+        let isLoading = false;
 
-        // --- 1. СИСТЕМА ПАМЯТИ И СЕССИЙ ---
         let sessions = JSON.parse(localStorage.getItem('ai_sessions')) || {};
         let currentSessionId = localStorage.getItem('ai_current_session');
-
         const oldHistory = JSON.parse(localStorage.getItem('ai_chat_histories'));
         if (oldHistory && Object.keys(sessions).length === 0) {
             const id = Date.now().toString();
@@ -143,7 +126,6 @@
             currentSessionId = id;
             localStorage.removeItem('ai_chat_histories');
         }
-
         if (Object.keys(sessions).length === 0) {
             const id = Date.now().toString();
             sessions[id] = { title: "Новый чат", histories: {}, models: {} };
@@ -153,18 +135,13 @@
         }
 
         function saveSessions() {
-            if (isLoading) return; // Блокируем сохранение, пока идет отрисовка окон!
-
+            if (isLoading) return;
             const currentModels = {};
             document.querySelectorAll('.ai-window').forEach((win, index) => {
                 const select = win.querySelector('.ai-select');
                 if (select) currentModels[index] = select.value;
             });
-
-            if (sessions[currentSessionId]) {
-                sessions[currentSessionId].models = currentModels;
-            }
-
+            if (sessions[currentSessionId]) sessions[currentSessionId].models = currentModels;
             localStorage.setItem('ai_sessions', JSON.stringify(sessions));
             localStorage.setItem('ai_current_session', currentSessionId);
             renderSidebar();
@@ -172,45 +149,31 @@
 
         function createNewSession() {
             const id = Date.now().toString();
-            
-            // Запоминаем текущие модели, чтобы перенести их в новый чат
             const currentModels = {};
             document.querySelectorAll('.ai-window').forEach((win, index) => {
                 const select = win.querySelector('.ai-select');
                 if (select) currentModels[index] = select.value;
             });
-
             sessions[id] = { title: "Новый чат", histories: {}, models: currentModels };
             currentSessionId = id;
-            
             document.querySelectorAll('.ai-chat-box').forEach(box => box.innerHTML = '');
             saveSessions();
         }
 
         function loadSession(id) {
-            isLoading = true; // Включаем предохранитель
+            isLoading = true;
             currentSessionId = id;
-
             const chatHistories = sessions[id].histories || {};
-            const loadedModels = sessions[id].models || {}; 
-
+            const loadedModels = sessions[id].models || {};
             const historyKeys = Object.keys(chatHistories);
             let neededWindows = historyKeys.length > 0 ? historyKeys.length : 3;
-            
             while (windowCount < neededWindows && windowCount < MAX_WINDOWS) addWindow();
-
             const windows = document.querySelectorAll('.ai-window');
             windows.forEach((win, index) => {
-                // Восстанавливаем выбранную модель ДО сохранения
                 const select = win.querySelector('.ai-select');
-                if (select && loadedModels[index]) {
-                    select.value = loadedModels[index];
-                }
-
-                // Восстанавливаем чат
+                if (select && loadedModels[index]) select.value = loadedModels[index];
                 const chatBox = win.querySelector('.ai-chat-box');
-                chatBox.innerHTML = ''; 
-                
+                chatBox.innerHTML = '';
                 if (chatHistories[index]) {
                     chatHistories[index].forEach(msg => {
                         const div = document.createElement('div');
@@ -221,58 +184,43 @@
                     chatBox.scrollTop = chatBox.scrollHeight;
                 }
             });
-            
-            isLoading = false; // Выключаем предохранитель
-            saveSessions(); // Теперь безопасно сохраняем
+            isLoading = false;
+            saveSessions();
         }
 
         function renderSidebar() {
             const list = document.querySelector('.chat-list');
             list.innerHTML = '';
-            
             const sortedIds = Object.keys(sessions).sort((a, b) => b - a);
-            
             sortedIds.forEach(id => {
                 const item = document.createElement('div');
                 item.className = 'chat-item';
                 item.style.cursor = 'pointer';
-                
                 if (id === currentSessionId) {
-                    item.style.backgroundColor = '#e3f2fd'; 
+                    item.style.backgroundColor = '#e3f2fd';
                     item.style.borderLeft = '4px solid #0078ff';
                     item.style.fontWeight = 'bold';
                 }
-                
                 item.innerHTML = `
                     <div style="display:flex; justify-content: space-between; align-items: center;">
                         <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;">${sessions[id].title}</span>
                         <span class="delete-chat" style="color: #d32f2f; margin-left: 10px; font-weight: bold; cursor: pointer;" title="Удалить">✖</span>
-                    </div>
-                `;
-                
+                    </div>`;
                 item.onclick = () => loadSession(id);
-                
                 item.querySelector('.delete-chat').onclick = (e) => {
-                    e.stopPropagation(); 
+                    e.stopPropagation();
                     if (confirm('Точно удалить этот диалог?')) {
                         delete sessions[id];
-                        if (Object.keys(sessions).length === 0) {
-                            createNewSession(); 
-                        } else if (id === currentSessionId) {
-                            loadSession(Object.keys(sessions)[0]); 
-                        } else {
-                            saveSessions();
-                        }
+                        if (Object.keys(sessions).length === 0) createNewSession();
+                        else if (id === currentSessionId) loadSession(Object.keys(sessions)[0]);
+                        else saveSessions();
                     }
                 };
-                
                 list.appendChild(item);
             });
         }
-
         document.querySelector('.new-chat-btn').onclick = createNewSession;
 
-        // --- 2. МОДЕЛИ И ОКНА ---
         const models = [
             { id: "gpt-5-nano", label: "GPT-5 Nano" },
             { id: "gpt-5-mini", label: "GPT-5 Mini" },
@@ -297,175 +245,138 @@
                     <button class="icon-btn" onclick="toggleFullscreen(this)" title="Развернуть">⛶</button>
                     <button class="icon-btn close-btn" onclick="removeWindow(this)" title="Закрыть окно">✖</button>
                 </div>
-                <div class="ai-chat-box"></div>
-            `;
+                <div class="ai-chat-box"></div>`;
             return win;
         }
-
         function addWindow() {
             if (windowCount >= MAX_WINDOWS) return;
             container.appendChild(createWindow());
             windowCount++;
             updateLayout();
-            saveSessions(); 
+            saveSessions();
         }
-
         function removeWindow(btn) {
             if (windowCount <= 1) return;
             btn.closest('.ai-window').remove();
             windowCount--;
             updateLayout();
-            saveSessions(); 
+            saveSessions();
         }
-
         function updateLayout() {
             container.setAttribute('data-count', windowCount);
             counterText.innerText = `Окон: ${windowCount} из ${MAX_WINDOWS}`;
         }
-
         function toggleFullscreen(btn) {
             const win = btn.closest('.ai-window');
             win.classList.toggle('fullscreen');
             btn.innerText = win.classList.contains('fullscreen') ? "🗗" : "⛶";
         }
-
         function autoResize(textarea) {
             textarea.style.height = 'auto';
-            textarea.style.height = (textarea.scrollHeight) + 'px';
+            textarea.style.height = textarea.scrollHeight + 'px';
         }
-
         function guessProvider(modelId) {
             const m = (modelId || "").toLowerCase();
             if (m.includes("claude")) return "claude";
             if (m.includes("gemini")) return "gemini";
             return "openai";
         }
-        
+
         function applyAuthToUI() {
             const nameEl = document.getElementById('userName');
             const avatarEl = document.getElementById('avatarLetter');
-
             if (!auth) {
-                nameEl.innerText = "Войти";
-                avatarEl.innerText = "?";
+                nameEl.innerText = 'Войти';
+                avatarEl.innerText = '?';
                 return;
             }
-
-            const fullName = `${auth.firstName || ""} ${auth.lastName || ""}`.trim();
-            nameEl.innerText = fullName || auth.email || "Пользователь";
-            avatarEl.innerText = (auth.firstName || auth.email || "?").toString().trim().charAt(0).toUpperCase();
+            const fullName = `${auth.firstName || ''} ${auth.lastName || ''}`.trim();
+            nameEl.innerText = fullName || auth.email || 'Пользователь';
+            avatarEl.innerText = (auth.firstName || auth.email || '?').toString().trim().charAt(0).toUpperCase();
         }
-
-        function openLoginModal() {
-            const modal = document.getElementById('loginModal');
+        function openLoginPopover() {
+            const panel = document.getElementById('loginPopover');
             const errEl = document.getElementById('loginError');
-
-            modal.classList.remove('hidden');
-            errEl.innerText = "";
-            document.getElementById('loginPassword').value = "";
-
-            if (auth?.email) {
-                document.getElementById('loginEmail').value = auth.email;
-            }
+            panel.classList.remove('hidden');
+            errEl.innerText = '';
+            document.getElementById('loginPassword').value = '';
+            document.getElementById('loginEmail').value = auth?.email || '';
+            setTimeout(() => document.getElementById('loginEmail').focus(), 0);
         }
-
-        function closeLoginModal() {
-            document.getElementById('loginModal').classList.add('hidden');
+        function closeLoginPopover() {
+            document.getElementById('loginPopover').classList.add('hidden');
         }
-
         function switchUser() {
-            openLoginModal();
+            const panel = document.getElementById('loginPopover');
+            if (panel.classList.contains('hidden')) openLoginPopover();
+            else closeLoginPopover();
         }
-
         async function doLogin() {
             const email = document.getElementById('loginEmail').value.trim();
             const password = document.getElementById('loginPassword').value;
             const errEl = document.getElementById('loginError');
-
-            errEl.innerText = "";
-
+            errEl.innerText = '';
             if (!email || !password) {
-                errEl.innerText = "Введите email и пароль";
+                errEl.innerText = 'Введите email и пароль';
                 return;
             }
-
             try {
                 const r = await fetch(N8N_LOGIN_URL, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ email, password })
                 });
-
                 const raw = await r.text();
                 let data = null;
-
-                try {
-                    data = JSON.parse(raw);
-                } catch (e) {
-                    errEl.innerText = "Сервер вернул некорректный ответ";
+                try { data = JSON.parse(raw); } catch (e) {
+                    errEl.innerText = 'Сервер вернул некорректный ответ';
                     return;
                 }
-
                 if (!r.ok || !data.success) {
-                    errEl.innerText = data.message || `Ошибка входа (${r.status})`;
+                    errEl.innerText = data?.message || `Ошибка входа (${r.status})`;
                     return;
                 }
-
                 auth = data;
                 localStorage.setItem('ai_auth', JSON.stringify(auth));
                 applyAuthToUI();
-                closeLoginModal();
+                closeLoginPopover();
             } catch (e) {
-                errEl.innerText = "Ошибка сети или CORS";
+                errEl.innerText = 'Ошибка сети или CORS';
             }
         }
-        // --- ENTER ---
-        document.getElementById("userInput").addEventListener("keydown", function(e) {
-            if (e.key === "Enter" && !e.shiftKey) {
+
+        document.getElementById('userInput').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
                 sendMessage();
             }
         });
 
-        // --- 3. АСИНХРОННАЯ ОТПРАВКА С ФОНОВОЙ ПАМЯТЬЮ ---
         async function sendMessage() {
-            const inputField = document.getElementById("userInput");
+            if (!auth?.email) { openLoginPopover(); return; }
+            const inputField = document.getElementById('userInput');
             const text = inputField.value.trim();
-
-            if (!auth?.email) {
-                openLoginModal();
-                return;
-            }
-
             if (!text) return;
-
             const targetSessionId = currentSessionId;
             const targetHistories = sessions[targetSessionId].histories = sessions[targetSessionId].histories || {};
-
-            if (sessions[targetSessionId].title === "Новый чат") {
-                sessions[targetSessionId].title = text.length > 25 ? text.substring(0, 25) + "..." : text;
+            if (sessions[targetSessionId].title === 'Новый чат') {
+                sessions[targetSessionId].title = text.length > 25 ? text.substring(0, 25) + '...' : text;
                 renderSidebar();
             }
-
             lastUserQuery = text;
-            lastAnswersByModel = {}; 
-            
+            lastAnswersByModel = {};
             const windows = document.querySelectorAll('.ai-window');
-            inputField.value = "";
+            inputField.value = '';
             inputField.style.height = 'auto';
-
             windows.forEach(async (win, index) => {
                 const select = win.querySelector('.ai-select');
-                if (!select) return; 
-
+                if (!select) return;
                 const model = select.value;
                 const chatBox = win.querySelector('.ai-chat-box');
-
                 const msgUser = document.createElement('div');
                 msgUser.className = 'msg msg-user';
                 msgUser.innerText = text;
                 chatBox.appendChild(msgUser);
-
                 const msgAi = document.createElement('div');
                 msgAi.className = 'msg msg-ai';
                 msgAi.innerText = 'Печатает...';
@@ -473,168 +384,121 @@
                 chatBox.scrollTop = chatBox.scrollHeight;
 
                 if (!targetHistories[index]) targetHistories[index] = [];
-                targetHistories[index].push({ role: "user", content: text });
-
+                targetHistories[index].push({ role: 'user', content: text });
                 const frontHistoryLimit = Number(auth?.maxMessages || 20);
                 if (targetHistories[index].length > frontHistoryLimit) {
                     targetHistories[index] = targetHistories[index].slice(-frontHistoryLimit);
                 }
-                saveSessions(); 
+                saveSessions();
 
                 try {
                     const response = await fetch(N8N_WEBHOOK_URL, {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ 
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
                             user_email: auth.email,
-                            user_query: text, 
-                            model: model,
-                            history: targetHistories[index] 
+                            user_query: text,
+                            model,
+                            history: targetHistories[index]
                         })
                     });
-
                     const raw = await response.text();
-                    let answerText = "Ошибка ответа сервера";
-
+                    let answerText = 'Ошибка ответа сервера';
                     if (response.ok) {
                         try {
                             const data = JSON.parse(raw);
-                            answerText = data.text || data.answer || "Пустой ответ";
-                            
+                            answerText = data.text || data.answer || 'Пустой ответ';
                             lastAnswersByModel[index] = {
                                 provider: data.provider || guessProvider(model),
                                 model: data.model || model,
                                 text: answerText
                             };
-                        } catch (e) { answerText = "Ошибка JSON"; }
+                        } catch (e) {
+                            answerText = 'Ошибка JSON';
+                        }
                     }
-
-                    targetHistories[index].push({ role: "assistant", content: answerText });
+                    targetHistories[index].push({ role: 'assistant', content: answerText });
                     if (targetHistories[index].length > frontHistoryLimit) {
                         targetHistories[index] = targetHistories[index].slice(-frontHistoryLimit);
                     }
-                    saveSessions(); 
-
+                    saveSessions();
                     if (currentSessionId === targetSessionId) {
                         if (document.body.contains(msgAi)) {
                             msgAi.innerText = answerText;
-                        } else {
-                            const activeWindows = document.querySelectorAll('.ai-window');
-                            if (activeWindows[index]) {
-                                const activeChatBox = activeWindows[index].querySelector('.ai-chat-box');
-                                const newMsg = document.createElement('div');
-                                newMsg.className = 'msg msg-ai';
-                                newMsg.innerText = answerText;
-                                activeChatBox.appendChild(newMsg);
-                                activeChatBox.scrollTop = activeChatBox.scrollHeight;
-                            }
                         }
                     }
-
                 } catch (err) {
                     if (currentSessionId === targetSessionId && document.body.contains(msgAi)) {
-                        msgAi.innerText = "Ошибка сети";
+                        msgAi.innerText = 'Ошибка сети';
                     }
                 }
             });
         }
 
-        // --- 4. САММАРИЗАТОР ---
         async function summarizeAll() {
-            if (!auth?.email) {
-                openLoginModal();
-                return;
-            }
-
+            if (!auth?.email) { openLoginPopover(); return; }
             const targetSessionId = currentSessionId;
             const targetHistories = sessions[targetSessionId].histories = sessions[targetSessionId].histories || {};
             const answersArray = Object.values(lastAnswersByModel);
-
             if (answersArray.length === 0) {
-                alert("Сначала задайте вопрос нейросетям, чтобы было что объединять!");
+                alert('Сначала задайте вопрос нейросетям, чтобы было что объединять!');
                 return;
             }
-
             const firstWin = document.querySelector('.ai-window');
             const userMessages = firstWin.querySelectorAll('.msg-user');
-            const userQuery = userMessages.length > 0 ? userMessages[userMessages.length - 1].innerText : "Вопрос не найден";
-
+            const userQuery = userMessages.length > 0 ? userMessages[userMessages.length - 1].innerText : 'Вопрос не найден';
             const payload = {
-                mode: "summary",
+                mode: 'summary',
                 user_email: auth.email,
                 user_query: userQuery,
                 answers: answersArray
             };
-
             try {
                 const response = await fetch(N8N_WEBHOOK_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
                 });
-
                 const raw = await response.text();
-
                 if (!response.ok) {
                     alert(`Саммаризатор: ошибка сервера (${response.status})`);
                     return;
                 }
-
                 let data;
-                try {
-                    data = JSON.parse(raw);
-                } catch (e) {
-                    alert("Саммаризатор: сервер вернул не JSON");
+                try { data = JSON.parse(raw); } catch (e) {
+                    alert('Саммаризатор: сервер вернул не JSON');
                     return;
                 }
-
-                const summaryText = data.text || data.answer || "Пустой ответ от сервера";
-                
+                const summaryText = data.text || data.answer || 'Пустой ответ от сервера';
                 const newIndex = Object.keys(targetHistories).length > 0 ? Object.keys(targetHistories).length : 3;
-
                 if (!targetHistories[newIndex]) targetHistories[newIndex] = [];
-                targetHistories[newIndex].push({ role: "user", content: "Общий ответ:" });
-                targetHistories[newIndex].push({ role: "assistant", content: summaryText });
+                targetHistories[newIndex].push({ role: 'user', content: 'Общий ответ:' });
+                targetHistories[newIndex].push({ role: 'assistant', content: summaryText });
                 saveSessions();
-
                 if (currentSessionId === targetSessionId) {
-                    addWindow(); 
+                    addWindow();
                     const windows = document.querySelectorAll('.ai-window');
                     const newWin = windows[windows.length - 1];
-
                     const select = newWin.querySelector('.ai-select');
                     if (select) {
                         select.outerHTML = '<div style="padding: 10px; font-weight: bold; background: linear-gradient(90deg, #ff8a00, #e52e71); -webkit-background-clip: text; color: transparent;">✨ ИИ-Саммаризатор</div>';
                     }
-
                     const chatBox = newWin.querySelector('.ai-chat-box');
                     const msgAi = document.createElement('div');
                     msgAi.className = 'msg msg-ai';
                     msgAi.innerText = summaryText;
-
                     chatBox.appendChild(msgAi);
                     chatBox.scrollTop = chatBox.scrollHeight;
                 }
-
             } catch (err) {
-                alert("Саммаризатор: ошибка сети");
+                alert('Саммаризатор: ошибка сети');
             }
         }
 
-        // --- ЗАПУСК ИНТЕРФЕЙСА ПРИ ОТКРЫТИИ САЙТА ---
-        isLoading = true; // Блокируем автосохранение при первой отрисовке
-        if (windowCount === 0) {
-            addWindow(); addWindow(); addWindow(); 
-        }
-        loadSession(currentSessionId); // Внутри этой функции isLoading выключится сам
+        isLoading = true;
+        if (windowCount === 0) { addWindow(); addWindow(); addWindow(); }
+        loadSession(currentSessionId);
         applyAuthToUI();
-
-        document.getElementById('loginModal').addEventListener('click', closeLoginModal);
-
-        if (!auth) {
-            openLoginModal();
-        }
-
     </script>
 </body>
 </html>
