@@ -461,9 +461,88 @@
             });
         }
 
-        // --- САММАРИЗАТОР ---
+// --- САММАРИЗАТОР ---
         async function summarizeAll() {
-            alert("Функция саммари в процессе настройки под новую базу данных.");
+            if (isLoading) return;
+            
+            const windows = document.querySelectorAll('.ai-window');
+            if (windows.length < 2) {
+                alert("Откройте хотя бы 2 окна с нейросетями и получите ответы для создания саммари!");
+                return;
+            }
+
+            let combinedText = "Сделай саммари из следующих ответов нейросетей на мой вопрос:\n\n";
+            let hasAnswers = false;
+
+            windows.forEach((win, index) => {
+                const select = win.querySelector('.ai-select');
+                const modelName = select ? select.options[select.selectedIndex].text.replace(' 🔒', '') : `Окно ${index + 1}`;
+                
+                // Получаем последнее сообщение от ИИ в этом окне
+                const msgs = win.querySelectorAll('.msg-ai');
+                if (msgs.length > 0) {
+                    const lastMsg = msgs[msgs.length - 1].innerText;
+                    if (lastMsg !== "Печатает..." && lastMsg !== "Ошибка сети" && lastMsg !== "") {
+                        combinedText += `--- Ответ от ${modelName} ---\n${lastMsg}\n\n`;
+                        hasAnswers = true;
+                    }
+                }
+            });
+
+            if (!hasAnswers) {
+                alert("Сначала задайте вопрос и дождитесь ответов нейросетей.");
+                return;
+            }
+
+            // Создаем новое окно для Саммари
+            addWindow(); 
+            const newWindows = document.querySelectorAll('.ai-window');
+            const summaryWin = newWindows[newWindows.length - 1];
+            
+            // Красиво оформляем процесс загрузки
+            const chatBox = summaryWin.querySelector('.ai-chat-box');
+            const summaryMsg = document.createElement('div');
+            summaryMsg.className = 'msg msg-ai';
+            summaryMsg.innerText = '✨ Анализирую ответы и пишу выжимку...';
+            summaryMsg.style.background = 'linear-gradient(135deg, #fff8e1, #fff3e0)';
+            summaryMsg.style.border = '1px solid #ffe082';
+            chatBox.appendChild(summaryMsg);
+
+            try {
+                const response = await fetch(N8N_WEBHOOK_URL, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ 
+                        user_query: combinedText, 
+                        model: "summary", // Фейковая модель, чтобы n8n понял, что это саммари
+                        history: [], 
+                        user_email: currentUser 
+                    })
+                });
+
+                const raw = await response.text();
+                let answerText = "Ошибка ответа сервера";
+
+                if (response.ok) {
+                    try {
+                        const data = JSON.parse(raw);
+                        answerText = data.text || data.answer || "Пустой ответ";
+                    } catch (e) { answerText = "Ошибка JSON"; }
+                }
+
+                summaryMsg.innerText = answerText;
+                
+                // Сохраняем это в историю чата, чтобы окно не пропало при обновлении
+                const targetSessionId = currentSessionId;
+                const targetHistories = sessions[targetSessionId].histories;
+                const newIndex = newWindows.length - 1;
+                if (!targetHistories[newIndex]) targetHistories[newIndex] = [];
+                targetHistories[newIndex].push({ role: "assistant", content: answerText });
+                saveSessions();
+
+            } catch (err) {
+                summaryMsg.innerText = "Ошибка сети при создании саммари";
+            }
         }
 
         // --- ЗАПУСК ---
@@ -471,4 +550,5 @@
     </script>
 </body>
 </html>
+
 
