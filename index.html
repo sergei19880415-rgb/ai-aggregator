@@ -43,8 +43,6 @@
         
         .ai-header { padding: 10px; background: #f8f9fa; border-bottom: 1px solid #eee; display: flex; align-items: center; gap: 5px; }
         .ai-select { flex: 1; padding: 6px; border-radius: 6px; border: 1px solid #ccc; font-size: 13px; font-weight: bold; outline: none; }
-        /* Стили для заблокированных моделей */
-        .ai-select option:disabled { color: #999; font-style: italic; }
 
         .icon-btn { background: #e0e0e0; width: 28px; height: 28px; border-radius: 6px; font-size: 14px; display: flex; align-items: center; justify-content: center; }
         .icon-btn:hover { background: #d0d0d0; }
@@ -112,14 +110,13 @@
     <script>
         // --- ТВОИ ССЫЛКИ N8N ---
         const N8N_WEBHOOK_URL = "https://tgdomen.ru/webhook/3bcfce39-4b24-4493-b3a7-cab0030e8a36";
-        const N8N_LOGIN_URL = "https://tgdomen.ru/webhook/login-auth"; // Путь к новому вебхуку входа
+        const N8N_LOGIN_URL = "https://tgdomen.ru/webhook/login-auth"; // Путь к вебхуку входа
 
         const container = document.getElementById('workspaceContainer');
         const counterText = document.getElementById('windowCounter');
         let windowCount = 0;
         const MAX_WINDOWS = 6;
         let lastUserQuery = "";
-        let lastAnswersByModel = {}; 
         let isLoading = false; 
 
         // СИСТЕМА ПАМЯТИ
@@ -131,18 +128,22 @@
         let currentPlan = localStorage.getItem('ai_plan_type') || "";
         let allowedModels = (localStorage.getItem('ai_allowed_models') || "").split(',');
 
+        // --- НОВЫЙ СПИСОК КРАСИВЫХ МОДЕЛЕЙ ---
         const allModels = [
-            { id: "gpt-5-nano", label: "GPT-5 Nano" },
-            { id: "gpt-5-mini", label: "GPT-5 Mini" },
-            { id: "gpt-5.1", label: "GPT-5.1" },
+            { id: "gpt-5.4", label: "GPT-5.4" },
             { id: "gpt-5.2", label: "GPT-5.2" },
-            { id: "gpt-4o", label: "GPT-4o" },
+            { id: "gpt-5.1", label: "GPT-5.1" },
+            { id: "gpt-5-mini", label: "GPT-5 Mini" },
+            { id: "gpt-5-nano", label: "GPT-5 Nano" },
             { id: "claude-haiku-4-5-20251001", label: "Claude 4.5 Haiku" },
             { id: "claude-sonnet-4-6", label: "Claude 4.6 Sonnet" },
             { id: "claude-opus-4-6", label: "Claude 4.6 Opus" },
+            { id: "gemini-3.1-pro-preview", label: "Gemini 3.1 Pro" },
+            { id: "gemini-3.1-flash-lite-preview", label: "Gemini 3.1 Flash Lite" },
             { id: "gemini-3-flash-preview", label: "Gemini 3 Flash" },
             { id: "gemini-2.5-pro", label: "Gemini 2.5 Pro" },
-            { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash" }
+            { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash" },
+            { id: "gemini-2.5-flash-lite", label: "Gemini 2.5 Flash Lite" }
         ];
 
         // --- ЛОГИКА АВТОРИЗАЦИИ ---
@@ -182,7 +183,6 @@
                 const data = await response.json();
 
                 if (data.success) {
-                    // Сохраняем данные пользователя
                     localStorage.setItem('ai_user_email', email);
                     localStorage.setItem('ai_user_name', data.firstName + " " + (data.lastName || ""));
                     localStorage.setItem('ai_plan_type', data.planType || "Базовый");
@@ -192,7 +192,7 @@
                     currentPlan = data.planType;
                     allowedModels = (data.allowedModels || "").split(',');
 
-                    checkAuth(); // Применяем и закрываем окно
+                    checkAuth(); 
                 } else {
                     errorDiv.innerText = data.message || "Ошибка входа";
                     errorDiv.style.display = "block";
@@ -212,7 +212,6 @@
             localStorage.removeItem('ai_allowed_models');
             location.reload();
         }
-
 
         // --- СИСТЕМА СЕССИЙ ---
         if (Object.keys(sessions).length === 0) {
@@ -314,18 +313,16 @@
 
         document.querySelector('.new-chat-btn').onclick = createNewSession;
 
-        // --- СОЗДАНИЕ ОКОН С ЗАМОЧКАМИ ---
+        // --- СОЗДАНИЕ ОКОН (Показываем только разрешенные модели) ---
         function createWindow() {
             const win = document.createElement('div');
             win.className = 'ai-window';
             
-            // Генерируем опции с проверкой прав доступа
-            const optionsHTML = allModels.map(m => {
-                // Разрешаем, если модель есть в массиве allowedModels, ИЛИ если массив пуст (на всякий случай)
-                const isAllowed = allowedModels.includes(m.id) || allowedModels[0] === "";
-                const lockIcon = isAllowed ? "" : " 🔒";
-                const disabledProp = isAllowed ? "" : "disabled";
-                return `<option value="${m.id}" ${disabledProp}>${m.label}${lockIcon}</option>`;
+            // Фильтруем модели: показываем только те, что есть в тарифе юзера
+            const availableModels = allModels.filter(m => allowedModels.includes(m.id) || allowedModels[0] === "");
+
+            const optionsHTML = availableModels.map(m => {
+                return `<option value="${m.id}">${m.label}</option>`;
             }).join('');
 
             win.innerHTML = `
@@ -423,7 +420,7 @@
                             user_query: text, 
                             model: model,
                             history: targetHistories[index],
-                            user_email: currentUser // Передаем email юзера в n8n!
+                            user_email: currentUser
                         })
                     });
 
@@ -461,7 +458,7 @@
             });
         }
 
-// --- САММАРИЗАТОР ---
+        // --- САММАРИЗАТОР ---
         async function summarizeAll() {
             if (isLoading) return;
             
@@ -476,9 +473,8 @@
 
             windows.forEach((win, index) => {
                 const select = win.querySelector('.ai-select');
-                const modelName = select ? select.options[select.selectedIndex].text.replace(' 🔒', '') : `Окно ${index + 1}`;
+                const modelName = select ? select.options[select.selectedIndex].text : `Окно ${index + 1}`;
                 
-                // Получаем последнее сообщение от ИИ в этом окне
                 const msgs = win.querySelectorAll('.msg-ai');
                 if (msgs.length > 0) {
                     const lastMsg = msgs[msgs.length - 1].innerText;
@@ -499,7 +495,17 @@
             const newWindows = document.querySelectorAll('.ai-window');
             const summaryWin = newWindows[newWindows.length - 1];
             
-            // Красиво оформляем процесс загрузки
+            // Прячем выбор модели и делаем красивый заголовок
+            const selectBox = summaryWin.querySelector('.ai-select');
+            if (selectBox) selectBox.style.display = 'none';
+            
+            const headerTitle = document.createElement('div');
+            headerTitle.innerText = '✨ Саммаризатор';
+            headerTitle.style.fontWeight = 'bold';
+            headerTitle.style.color = '#d4af37';
+            headerTitle.style.marginRight = 'auto'; // Сдвигаем влево
+            summaryWin.querySelector('.ai-header').prepend(headerTitle);
+
             const chatBox = summaryWin.querySelector('.ai-chat-box');
             const summaryMsg = document.createElement('div');
             summaryMsg.className = 'msg msg-ai';
@@ -514,7 +520,7 @@
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ 
                         user_query: combinedText, 
-                        model: "summary", // Фейковая модель, чтобы n8n понял, что это саммари
+                        model: "summary", 
                         history: [], 
                         user_email: currentUser 
                     })
@@ -532,7 +538,6 @@
 
                 summaryMsg.innerText = answerText;
                 
-                // Сохраняем это в историю чата, чтобы окно не пропало при обновлении
                 const targetSessionId = currentSessionId;
                 const targetHistories = sessions[targetSessionId].histories;
                 const newIndex = newWindows.length - 1;
@@ -546,9 +551,7 @@
         }
 
         // --- ЗАПУСК ---
-        checkAuth(); // Проверяем логин при загрузке страницы
+        checkAuth();
     </script>
 </body>
 </html>
-
-
