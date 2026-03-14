@@ -36,11 +36,17 @@
         /* ПРАВАЯ ЧАСТЬ */
         .main-content { flex: 1; display: flex; flex-direction: column; position: relative; }
         .top-bar { height: 50px; background: #fff; border-bottom: 1px solid #e0e0e0; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; }
+        
+        /* ПЕРЕКЛЮЧАТЕЛЬ РЕЖИМОВ */
+        .mode-toggle { display: flex; background: #f1f3f4; border-radius: 20px; padding: 3px; }
+        .mode-btn { padding: 6px 16px; border-radius: 18px; font-size: 13px; font-weight: bold; background: transparent; color: #555; }
+        .mode-btn.active { background: #fff; color: #1a73e8; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+
         .workspace { flex: 1; display: flex; flex-wrap: wrap; padding: 10px; gap: 10px; overflow-y: auto; align-content: flex-start; }
         
         .ai-window { background: #fff; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); display: flex; flex-direction: column; overflow: hidden; transition: 0.3s; flex: 1 1 calc(33.333% - 10px); min-width: 300px; height: calc(100vh - 160px); }
         
-        /* Если открыто 4, 5 или 6 окон — делим высоту пополам (с учетом отступов) */
+        /* Адаптивная высота окон */
         .workspace[data-count="4"] .ai-window,
         .workspace[data-count="5"] .ai-window,
         .workspace[data-count="6"] .ai-window {
@@ -100,6 +106,10 @@
 
     <div class="main-content">
         <div class="top-bar">
+            <div class="mode-toggle">
+                <button class="mode-btn active" id="btnModeText" onclick="setMode('text')">📝 Текст</button>
+                <button class="mode-btn" id="btnModeImage" onclick="setMode('image')">🎨 Картинки</button>
+            </div>
             <div id="windowCounter" style="font-weight: bold; color: #555;">Окон: 0 из 6</div>
         </div>
         
@@ -111,50 +121,85 @@
                 <textarea id="userInput" rows="1" placeholder="Спроси нейросети о чем угодно (Shift+Enter для переноса)..." oninput="autoResize(this)"></textarea>
                 <button class="send-btn" onclick="sendMessage()">➤</button>
             </div>
-            <button class="summary-btn" onclick="summarizeAll()">✨ Саммари</button>
+            <button class="summary-btn" id="summaryBtn" onclick="summarizeAll()">✨ Саммари</button>
         </div>
     </div>
 
     <script>
-        // --- ТВОИ ССЫЛКИ N8N ---
         const N8N_WEBHOOK_URL = "https://tgdomen.ru/webhook/3bcfce39-4b24-4493-b3a7-cab0030e8a36";
-        const N8N_LOGIN_URL = "https://tgdomen.ru/webhook/login-auth"; // Путь к вебхуку входа
+        const N8N_LOGIN_URL = "https://tgdomen.ru/webhook/login-auth"; 
 
         const container = document.getElementById('workspaceContainer');
         const counterText = document.getElementById('windowCounter');
         let windowCount = 0;
-        const MAX_WINDOWS = 6;
-        let lastUserQuery = "";
+        let MAX_WINDOWS = 6; // Будет меняться динамически
+        let currentMode = 'text'; // 'text' или 'image'
         let isLoading = false; 
 
-        // СИСТЕМА ПАМЯТИ
         let sessions = JSON.parse(localStorage.getItem('ai_sessions')) || {};
         let currentSessionId = localStorage.getItem('ai_current_session');
 
-        // ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ПОЛЬЗОВАТЕЛЯ
         let currentUser = localStorage.getItem('ai_user_email') || "";
         let currentPlan = localStorage.getItem('ai_plan_type') || "";
         let allowedModels = (localStorage.getItem('ai_allowed_models') || "").split(',');
 
-        // --- НОВЫЙ СПИСОК КРАСИВЫХ МОДЕЛЕЙ ---
+        // --- МОДЕЛИ С РАЗДЕЛЕНИЕМ ПО ТИПАМ ---
         const allModels = [
-            { id: "gpt-5.4", label: "GPT-5.4" },
-            { id: "gpt-5.2", label: "GPT-5.2" },
-            { id: "gpt-5.1", label: "GPT-5.1" },
-            { id: "gpt-5-mini", label: "GPT-5 Mini" },
-            { id: "gpt-5-nano", label: "GPT-5 Nano" },
-            { id: "claude-haiku-4-5-20251001", label: "Claude 4.5 Haiku" },
-            { id: "claude-sonnet-4-6", label: "Claude 4.6 Sonnet" },
-            { id: "claude-opus-4-6", label: "Claude 4.6 Opus" },
-            { id: "gemini-3.1-pro-preview", label: "Gemini 3.1 Pro" },
-            { id: "gemini-3.1-flash-lite-preview", label: "Gemini 3.1 Flash Lite" },
-            { id: "gemini-3-flash-preview", label: "Gemini 3 Flash" },
-            { id: "gemini-2.5-pro", label: "Gemini 2.5 Pro" },
-            { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash" },
-            { id: "gemini-2.5-flash-lite", label: "Gemini 2.5 Flash Lite" },
-            { id: "sonar", label: "Perplexity Sonar" },
-            { id: "sonar-pro", label: "Perplexity Sonar Pro" },
+            { id: "gpt-5.4", label: "GPT-5.4", type: "text" },
+            { id: "gpt-5.2", label: "GPT-5.2", type: "text" },
+            { id: "gpt-5.1", label: "GPT-5.1", type: "text" },
+            { id: "gpt-5-mini", label: "GPT-5 Mini", type: "text" },
+            { id: "gpt-5-nano", label: "GPT-5 Nano", type: "text" },
+            { id: "claude-haiku-4-5-20251001", label: "Claude 4.5 Haiku", type: "text" },
+            { id: "claude-sonnet-4-6", label: "Claude 4.6 Sonnet", type: "text" },
+            { id: "claude-opus-4-6", label: "Claude 4.6 Opus", type: "text" },
+            { id: "gemini-3.1-pro-preview", label: "Gemini 3.1 Pro", type: "text" },
+            { id: "gemini-3.1-flash-lite-preview", label: "Gemini 3.1 Flash Lite", type: "text" },
+            { id: "gemini-3-flash-preview", label: "Gemini 3 Flash", type: "text" },
+            { id: "gemini-2.5-pro", label: "Gemini 2.5 Pro", type: "text" },
+            { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash", type: "text" },
+            { id: "gemini-2.5-flash-lite", label: "Gemini 2.5 Flash Lite", type: "text" },
+            { id: "sonar", label: "Perplexity Sonar", type: "text" },
+            { id: "sonar-pro", label: "Perplexity Sonar Pro", type: "text" },
+            // НОВЫЕ МОДЕЛИ КАРТИНОК
+            { id: "dall-e-3", label: "DALL-E 3", type: "image" }
         ];
+
+        // --- ЛОГИКА РЕЖИМОВ (Текст / Картинки) ---
+        function setMode(mode) {
+            currentMode = mode;
+            MAX_WINDOWS = mode === 'text' ? 6 : 2;
+
+            document.getElementById('btnModeText').classList.toggle('active', mode === 'text');
+            document.getElementById('btnModeImage').classList.toggle('active', mode === 'image');
+            document.getElementById('summaryBtn').style.display = mode === 'text' ? 'block' : 'none';
+            document.getElementById('userInput').placeholder = mode === 'text' ? "Спроси нейросети о чем угодно..." : "Опишите картинку, которую хотите создать...";
+
+            // Закрываем лишние окна, если перешли в режим картинок
+            const windows = document.querySelectorAll('.ai-window');
+            if (windows.length > MAX_WINDOWS) {
+                for (let i = windows.length - 1; i >= MAX_WINDOWS; i--) {
+                    windows[i].remove();
+                    windowCount--;
+                }
+            }
+            
+            // Обновляем списки моделей в открытых окнах
+            document.querySelectorAll('.ai-select').forEach(select => {
+                select.innerHTML = getModelsHTML();
+            });
+
+            updateLayout();
+            saveSessions();
+        }
+
+        function getModelsHTML() {
+            const availableModels = allModels.filter(m => 
+                (allowedModels.includes(m.id) || allowedModels[0] === "") && 
+                m.type === currentMode
+            );
+            return availableModels.map(m => `<option value="${m.id}">${m.label}</option>`).join('');
+        }
 
         // --- ЛОГИКА АВТОРИЗАЦИИ ---
         function checkAuth() {
@@ -164,7 +209,6 @@
                 document.getElementById('avatarLetter').innerText = document.getElementById('userName').innerText.charAt(0).toUpperCase();
                 document.getElementById('userPlan').innerText = currentPlan || "Стандарт";
                 
-                // Инициализация при успешном входе
                 if (windowCount === 0) { isLoading = true; addWindow(); addWindow(); addWindow(); }
                 loadSession(currentSessionId);
             } else {
@@ -179,7 +223,6 @@
             const errorDiv = document.getElementById('authError');
 
             if (!email || !password) return;
-
             btn.innerText = "Проверка...";
             errorDiv.style.display = "none";
 
@@ -189,7 +232,6 @@
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ email: email, password: password })
                 });
-
                 const data = await response.json();
 
                 if (data.success) {
@@ -197,11 +239,7 @@
                     localStorage.setItem('ai_user_name', data.firstName + " " + (data.lastName || ""));
                     localStorage.setItem('ai_plan_type', data.planType || "Базовый");
                     localStorage.setItem('ai_allowed_models', data.allowedModels || "");
-
-                    currentUser = email;
-                    currentPlan = data.planType;
-                    allowedModels = (data.allowedModels || "").split(',');
-
+                    currentUser = email; currentPlan = data.planType; allowedModels = (data.allowedModels || "").split(',');
                     checkAuth(); 
                 } else {
                     errorDiv.innerText = data.message || "Ошибка входа";
@@ -278,7 +316,12 @@
                     chatHistories[index].forEach(msg => {
                         const div = document.createElement('div');
                         div.className = 'msg ' + (msg.role === 'user' ? 'msg-user' : 'msg-ai');
-                        div.innerText = msg.content;
+                        // Если это HTML (картинка), вставляем как HTML
+                        if (msg.content.includes('<img')) {
+                            div.innerHTML = msg.content;
+                        } else {
+                            div.innerText = msg.content;
+                        }
                         chatBox.appendChild(div);
                     });
                     chatBox.scrollTop = chatBox.scrollHeight;
@@ -323,21 +366,13 @@
 
         document.querySelector('.new-chat-btn').onclick = createNewSession;
 
-        // --- СОЗДАНИЕ ОКОН (Показываем только разрешенные модели) ---
+        // --- СОЗДАНИЕ ОКОН ---
         function createWindow() {
             const win = document.createElement('div');
             win.className = 'ai-window';
-            
-            // Фильтруем модели: показываем только те, что есть в тарифе юзера
-            const availableModels = allModels.filter(m => allowedModels.includes(m.id) || allowedModels[0] === "");
-
-            const optionsHTML = availableModels.map(m => {
-                return `<option value="${m.id}">${m.label}</option>`;
-            }).join('');
-
             win.innerHTML = `
                 <div class="ai-header">
-                    <select class="ai-select" onchange="saveSessions()">${optionsHTML}</select>
+                    <select class="ai-select" onchange="saveSessions()">${getModelsHTML()}</select>
                     <button class="icon-btn" onclick="toggleFullscreen(this)" title="Развернуть">⛶</button>
                     <button class="icon-btn close-btn" onclick="removeWindow(this)" title="Закрыть окно">✖</button>
                 </div>
@@ -413,7 +448,7 @@
 
                 const msgAi = document.createElement('div');
                 msgAi.className = 'msg msg-ai';
-                msgAi.innerText = 'Печатает...';
+                msgAi.innerText = currentMode === 'image' ? 'Рисую...' : 'Печатает...';
                 chatBox.appendChild(msgAi);
                 chatBox.scrollTop = chatBox.scrollHeight;
 
@@ -430,7 +465,10 @@
                             user_query: text, 
                             model: model,
                             history: targetHistories[index],
-                            user_email: currentUser
+                            user_email: currentUser,
+                            task_type: currentMode, // ПЕРЕДАЕМ ТИП ЗАДАЧИ!
+                            image_size: "1024x1024",
+                            image_quality: "standard"
                         })
                     });
 
@@ -449,16 +487,11 @@
 
                     if (currentSessionId === targetSessionId) {
                         if (document.body.contains(msgAi)) {
-                            msgAi.innerText = answerText;
-                        } else {
-                            const activeWindows = document.querySelectorAll('.ai-window');
-                            if (activeWindows[index]) {
-                                const activeChatBox = activeWindows[index].querySelector('.ai-chat-box');
-                                const newMsg = document.createElement('div');
-                                newMsg.className = 'msg msg-ai';
-                                newMsg.innerText = answerText;
-                                activeChatBox.appendChild(newMsg);
-                                activeChatBox.scrollTop = activeChatBox.scrollHeight;
+                            // Если это картинка (есть тег img), вставляем как HTML
+                            if (answerText.includes('<img')) {
+                                msgAi.innerHTML = answerText;
+                            } else {
+                                msgAi.innerText = answerText;
                             }
                         }
                     }
@@ -500,12 +533,10 @@
                 return;
             }
 
-            // Создаем новое окно для Саммари
             addWindow(); 
             const newWindows = document.querySelectorAll('.ai-window');
             const summaryWin = newWindows[newWindows.length - 1];
             
-            // Прячем выбор модели и делаем красивый заголовок
             const selectBox = summaryWin.querySelector('.ai-select');
             if (selectBox) selectBox.style.display = 'none';
             
@@ -513,7 +544,7 @@
             headerTitle.innerText = '✨ Саммаризатор';
             headerTitle.style.fontWeight = 'bold';
             headerTitle.style.color = '#d4af37';
-            headerTitle.style.marginRight = 'auto'; // Сдвигаем влево
+            headerTitle.style.marginRight = 'auto';
             summaryWin.querySelector('.ai-header').prepend(headerTitle);
 
             const chatBox = summaryWin.querySelector('.ai-chat-box');
@@ -532,7 +563,8 @@
                         user_query: combinedText, 
                         model: "summary", 
                         history: [], 
-                        user_email: currentUser 
+                        user_email: currentUser,
+                        task_type: "text"
                     })
                 });
 
@@ -565,7 +597,3 @@
     </script>
 </body>
 </html>
-
-
-
-
