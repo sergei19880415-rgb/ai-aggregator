@@ -37,12 +37,10 @@
         .main-content { flex: 1; display: flex; flex-direction: column; position: relative; }
         .top-bar { height: 50px; background: #fff; border-bottom: 1px solid #e0e0e0; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; }
         
-        /* ПЕРЕКЛЮЧАТЕЛЬ РЕЖИМОВ И НАСТРОЙКИ */
-        .top-controls { display: flex; align-items: center; gap: 20px; }
+        /* ПЕРЕКЛЮЧАТЕЛЬ РЕЖИМОВ */
         .mode-toggle { display: flex; background: #f1f3f4; border-radius: 20px; padding: 3px; }
         .mode-btn { padding: 6px 16px; border-radius: 18px; font-size: 13px; font-weight: bold; background: transparent; color: #555; }
         .mode-btn.active { background: #fff; color: #1a73e8; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-        .img-settings { display: none; align-items: center; gap: 10px; background: #f8f9fa; padding: 4px 10px; border-radius: 8px; border: 1px solid #eee; }
 
         .workspace { flex: 1; display: flex; flex-wrap: wrap; padding: 10px; gap: 10px; overflow-y: auto; align-content: flex-start; }
         
@@ -51,15 +49,12 @@
         /* Адаптивная высота окон */
         .workspace[data-count="4"] .ai-window,
         .workspace[data-count="5"] .ai-window,
-        .workspace[data-count="6"] .ai-window {
-            height: calc(50vh - 90px); 
-        }
-
+        .workspace[data-count="6"] .ai-window { height: calc(50vh - 90px); }
         .ai-window.fullscreen { position: absolute; top: 10px; left: 10px; right: 10px; bottom: 90px; height: auto; z-index: 50; flex: none; width: auto; }
         
-        .ai-header { padding: 10px; background: #f8f9fa; border-bottom: 1px solid #eee; display: flex; align-items: center; gap: 5px; }
-        .ai-select { flex: 1; padding: 6px; border-radius: 6px; border: 1px solid #ccc; font-size: 13px; font-weight: bold; outline: none; }
-
+        .ai-header { padding: 10px; background: #f8f9fa; border-bottom: 1px solid #eee; display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+        .ai-select { padding: 6px; border-radius: 6px; border: 1px solid #ccc; font-size: 13px; font-weight: bold; outline: none; }
+        
         .icon-btn { background: #e0e0e0; width: 28px; height: 28px; border-radius: 6px; font-size: 14px; display: flex; align-items: center; justify-content: center; }
         .icon-btn:hover { background: #d0d0d0; }
         .close-btn:hover { background: #ffcdd2; color: #d32f2f; }
@@ -108,25 +103,9 @@
 
     <div class="main-content">
         <div class="top-bar">
-            <div class="top-controls">
-                <div class="mode-toggle">
-                    <button class="mode-btn active" id="btnModeText" onclick="setMode('text')">📝 Текст</button>
-                    <button class="mode-btn" id="btnModeImage" onclick="setMode('image')">🎨 Картинки</button>
-                </div>
-                <div class="img-settings" id="imgSettingsBox">
-                    <span style="font-size: 13px; font-weight: bold; color: #555;">Размер:</span>
-                    <select id="imgSize" class="ai-select" style="padding: 4px; font-size: 13px; width: auto;">
-                        <option value="1024x1024">1:1 Квадрат</option>
-                        <option value="1024x1792">9:16 Вертикаль</option>
-                        <option value="1792x1024">16:9 Горизонталь</option>
-                    </select>
-                    
-                    <span style="font-size: 13px; font-weight: bold; color: #555; margin-left: 10px;">Качество:</span>
-                    <select id="imgQuality" class="ai-select" style="padding: 4px; font-size: 13px; width: auto;">
-                        <option value="standard">Standard</option>
-                        <option value="hd">HD</option>
-                    </select>
-                </div>
+            <div class="mode-toggle">
+                <button class="mode-btn active" id="btnModeText" onclick="setMode('text')">📝 Текст</button>
+                <button class="mode-btn" id="btnModeImage" onclick="setMode('image')">🎨 Картинки</button>
             </div>
             <div id="windowCounter" style="font-weight: bold; color: #555;">Окон: 0 из 6</div>
         </div>
@@ -159,7 +138,9 @@
 
         let currentUser = localStorage.getItem('ai_user_email') || "";
         let currentPlan = localStorage.getItem('ai_plan_type') || "";
-        let allowedModels = (localStorage.getItem('ai_allowed_models') || "").split(',');
+        
+        // УБИРАЕМ ПРОБЕЛЫ ИЗ ТАРИФА, чтобы DALL-E 3 всегда находился
+        let allowedModels = (localStorage.getItem('ai_allowed_models') || "").split(',').map(m => m.trim());
 
         const allModels = [
             { id: "gpt-5.4", label: "GPT-5.4", type: "text" },
@@ -178,26 +159,22 @@
             { id: "gemini-2.5-flash-lite", label: "Gemini 2.5 Flash Lite", type: "text" },
             { id: "sonar", label: "Perplexity Sonar", type: "text" },
             { id: "sonar-pro", label: "Perplexity Sonar Pro", type: "text" },
-            // МОДЕЛИ КАРТИНОК
             { id: "dall-e-3", label: "DALL-E 3", type: "image" },
             { id: "dall-e-2", label: "DALL-E 2", type: "image" }
         ];
 
-        // --- ЛОГИКА РЕЖИМОВ (Текст / Картинки) ---
+        // --- ЛОГИКА РЕЖИМОВ ---
         function setMode(mode) {
-            if (currentMode === mode) return; // Если уже в этом режиме, ничего не делаем
+            if (currentMode === mode) return; 
             currentMode = mode;
             MAX_WINDOWS = mode === 'text' ? 6 : 2;
 
             document.getElementById('btnModeText').classList.toggle('active', mode === 'text');
             document.getElementById('btnModeImage').classList.toggle('active', mode === 'image');
             
-            // Показываем настройки и меняем UI
-            document.getElementById('imgSettingsBox').style.display = mode === 'image' ? 'flex' : 'none';
             document.getElementById('summaryBtn').style.display = mode === 'text' ? 'block' : 'none';
             document.getElementById('userInput').placeholder = mode === 'text' ? "Спроси нейросети о чем угодно..." : "Опишите картинку, которую хотите создать...";
 
-            // Закрываем лишние окна
             const windows = document.querySelectorAll('.ai-window');
             if (windows.length > MAX_WINDOWS) {
                 for (let i = windows.length - 1; i >= MAX_WINDOWS; i--) {
@@ -206,13 +183,16 @@
                 }
             }
             
-            // Обновляем списки моделей
-            document.querySelectorAll('.ai-select').forEach(select => {
-                select.innerHTML = getModelsHTML();
+            // Показываем/скрываем настройки внутри окон
+            document.querySelectorAll('.ai-window').forEach(win => {
+                const select = win.querySelector('.model-select');
+                if (select) select.innerHTML = getModelsHTML();
+                
+                const imgSettings = win.querySelectorAll('.img-setting');
+                imgSettings.forEach(el => el.style.display = mode === 'image' ? 'inline-block' : 'none');
             });
-            updateLayout();
 
-            // Создаем новую чистую сессию при смене режима
+            updateLayout();
             createNewSession();
         }
 
@@ -225,7 +205,7 @@
             return availableModels.map(m => `<option value="${m.id}">${m.label}</option>`).join('');
         }
 
-        // --- ЛОГИКА АВТОРИЗАЦИИ ---
+        // --- АВТОРИЗАЦИЯ ---
         function checkAuth() {
             if (currentUser) {
                 document.getElementById('authOverlay').style.display = 'none';
@@ -263,7 +243,10 @@
                     localStorage.setItem('ai_user_name', data.firstName + " " + (data.lastName || ""));
                     localStorage.setItem('ai_plan_type', data.planType || "Базовый");
                     localStorage.setItem('ai_allowed_models', data.allowedModels || "");
-                    currentUser = email; currentPlan = data.planType; allowedModels = (data.allowedModels || "").split(',');
+                    currentUser = email; 
+                    currentPlan = data.planType; 
+                    // Сразу очищаем от пробелов при логине!
+                    allowedModels = (data.allowedModels || "").split(',').map(m => m.trim());
                     checkAuth(); 
                 } else {
                     errorDiv.innerText = data.message || "Ошибка входа";
@@ -285,7 +268,7 @@
             location.reload();
         }
 
-        // --- СИСТЕМА СЕССИЙ ---
+        // --- СЕССИИ ---
         if (Object.keys(sessions).length === 0) {
             const id = Date.now().toString();
             sessions[id] = { title: "Новый чат", histories: {}, models: {} };
@@ -298,7 +281,7 @@
             if (isLoading) return; 
             const currentModels = {};
             document.querySelectorAll('.ai-window').forEach((win, index) => {
-                const select = win.querySelector('.ai-select');
+                const select = win.querySelector('.model-select');
                 if (select) currentModels[index] = select.value;
             });
             if (sessions[currentSessionId]) sessions[currentSessionId].models = currentModels;
@@ -311,7 +294,7 @@
             const id = Date.now().toString();
             const currentModels = {};
             document.querySelectorAll('.ai-window').forEach((win, index) => {
-                const select = win.querySelector('.ai-select');
+                const select = win.querySelector('.model-select');
                 if (select) currentModels[index] = select.value;
             });
             sessions[id] = { title: "Новый чат", histories: {}, models: currentModels };
@@ -328,14 +311,13 @@
             const historyKeys = Object.keys(chatHistories);
             let neededWindows = historyKeys.length > 0 ? historyKeys.length : 3;
             
-            // Если загружаем сессию картинок, не открываем больше 2 окон
             if (currentMode === 'image' && neededWindows > 2) neededWindows = 2;
             
             while (windowCount < neededWindows && windowCount < MAX_WINDOWS) addWindow();
 
             const windows = document.querySelectorAll('.ai-window');
             windows.forEach((win, index) => {
-                const select = win.querySelector('.ai-select');
+                const select = win.querySelector('.model-select');
                 if (select && loadedModels[index]) select.value = loadedModels[index];
                 const chatBox = win.querySelector('.ai-chat-box');
                 chatBox.innerHTML = ''; 
@@ -392,14 +374,29 @@
 
         document.querySelector('.new-chat-btn').onclick = createNewSession;
 
-        // --- СОЗДАНИЕ ОКОН ---
+        // --- СОЗДАНИЕ ОКОН (С НАСТРОЙКАМИ ВНУТРИ) ---
         function createWindow() {
             const win = document.createElement('div');
             win.className = 'ai-window';
+            
+            const imgDisplay = currentMode === 'image' ? 'inline-block' : 'none';
+
             win.innerHTML = `
                 <div class="ai-header">
-                    <select class="ai-select" onchange="saveSessions()">${getModelsHTML()}</select>
-                    <button class="icon-btn" onclick="toggleFullscreen(this)" title="Развернуть">⛶</button>
+                    <select class="ai-select model-select" onchange="saveSessions()" style="flex: 1; min-width: 100px;">${getModelsHTML()}</select>
+                    
+                    <select class="ai-select img-setting size-select" style="display: ${imgDisplay}; margin-left: 5px; font-size: 12px; padding: 4px; width: auto;" title="Размер">
+                        <option value="1024x1024">1:1</option>
+                        <option value="1024x1792">9:16</option>
+                        <option value="1792x1024">16:9</option>
+                    </select>
+                    
+                    <select class="ai-select img-setting quality-select" style="display: ${imgDisplay}; margin-left: 5px; font-size: 12px; padding: 4px; width: auto;" title="Качество">
+                        <option value="standard">STD</option>
+                        <option value="hd">HD</option>
+                    </select>
+
+                    <button class="icon-btn" onclick="toggleFullscreen(this)" title="Развернуть" style="margin-left: 5px;">⛶</button>
                     <button class="icon-btn close-btn" onclick="removeWindow(this)" title="Закрыть окно">✖</button>
                 </div>
                 <div class="ai-chat-box"></div>
@@ -461,15 +458,15 @@
             inputField.value = "";
             inputField.style.height = 'auto';
 
-            // Собираем настройки картинки
-            const imgSize = currentMode === 'image' ? document.getElementById("imgSize").value : "";
-            const imgQuality = currentMode === 'image' ? document.getElementById("imgQuality").value : "";
-
             windows.forEach(async (win, index) => {
-                const select = win.querySelector('.ai-select');
+                const select = win.querySelector('.model-select');
                 if (!select || !select.value) return; 
                 const model = select.value;
                 const chatBox = win.querySelector('.ai-chat-box');
+
+                // Берем настройки картинки ИМЕННО из этого окна
+                const imgSize = currentMode === 'image' ? win.querySelector('.size-select').value : "";
+                const imgQuality = currentMode === 'image' ? win.querySelector('.quality-select').value : "";
 
                 const msgUser = document.createElement('div');
                 msgUser.className = 'msg msg-user';
@@ -544,7 +541,7 @@
             let hasAnswers = false;
 
             windows.forEach((win, index) => {
-                const select = win.querySelector('.ai-select');
+                const select = win.querySelector('.model-select');
                 const modelName = select ? select.options[select.selectedIndex].text : `Окно ${index + 1}`;
                 
                 const msgs = win.querySelectorAll('.msg-ai');
@@ -566,8 +563,10 @@
             const newWindows = document.querySelectorAll('.ai-window');
             const summaryWin = newWindows[newWindows.length - 1];
             
-            const selectBox = summaryWin.querySelector('.ai-select');
+            const selectBox = summaryWin.querySelector('.model-select');
             if (selectBox) selectBox.style.display = 'none';
+            const imgSettings = summaryWin.querySelectorAll('.img-setting');
+            imgSettings.forEach(el => el.style.display = 'none');
             
             const headerTitle = document.createElement('div');
             headerTitle.innerText = '✨ Саммаризатор';
