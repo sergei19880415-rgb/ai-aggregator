@@ -114,14 +114,17 @@
                     <button class="mode-btn" id="btnModeImage" onclick="setMode('image')">🎨 Картинки</button>
                 </div>
                 <div class="img-settings" id="imgSettingsBox">
-                    <select id="imgSize" class="ai-select" style="padding: 4px; font-size: 12px; width: auto;">
+                    <span style="font-size: 13px; font-weight: bold; color: #555;">Размер:</span>
+                    <select id="imgSize" class="ai-select" style="padding: 4px; font-size: 13px; width: auto;">
                         <option value="1024x1024">1:1 Квадрат</option>
-                        <option value="1024x1792">9:16 Вертикаль (DALL-E 3)</option>
-                        <option value="1792x1024">16:9 Горизонталь (DALL-E 3)</option>
+                        <option value="1024x1792">9:16 Вертикаль</option>
+                        <option value="1792x1024">16:9 Горизонталь</option>
                     </select>
-                    <select id="imgQuality" class="ai-select" style="padding: 4px; font-size: 12px; width: auto;">
+                    
+                    <span style="font-size: 13px; font-weight: bold; color: #555; margin-left: 10px;">Качество:</span>
+                    <select id="imgQuality" class="ai-select" style="padding: 4px; font-size: 13px; width: auto;">
                         <option value="standard">Standard</option>
-                        <option value="hd">HD (только DALL-E 3)</option>
+                        <option value="hd">HD</option>
                     </select>
                 </div>
             </div>
