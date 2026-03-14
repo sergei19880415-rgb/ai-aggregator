@@ -37,10 +37,12 @@
         .main-content { flex: 1; display: flex; flex-direction: column; position: relative; }
         .top-bar { height: 50px; background: #fff; border-bottom: 1px solid #e0e0e0; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; }
         
-        /* ПЕРЕКЛЮЧАТЕЛЬ РЕЖИМОВ */
+        /* ПЕРЕКЛЮЧАТЕЛЬ РЕЖИМОВ И НАСТРОЙКИ */
+        .top-controls { display: flex; align-items: center; gap: 20px; }
         .mode-toggle { display: flex; background: #f1f3f4; border-radius: 20px; padding: 3px; }
         .mode-btn { padding: 6px 16px; border-radius: 18px; font-size: 13px; font-weight: bold; background: transparent; color: #555; }
         .mode-btn.active { background: #fff; color: #1a73e8; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .img-settings { display: none; align-items: center; gap: 10px; background: #f8f9fa; padding: 4px 10px; border-radius: 8px; border: 1px solid #eee; }
 
         .workspace { flex: 1; display: flex; flex-wrap: wrap; padding: 10px; gap: 10px; overflow-y: auto; align-content: flex-start; }
         
@@ -106,9 +108,22 @@
 
     <div class="main-content">
         <div class="top-bar">
-            <div class="mode-toggle">
-                <button class="mode-btn active" id="btnModeText" onclick="setMode('text')">📝 Текст</button>
-                <button class="mode-btn" id="btnModeImage" onclick="setMode('image')">🎨 Картинки</button>
+            <div class="top-controls">
+                <div class="mode-toggle">
+                    <button class="mode-btn active" id="btnModeText" onclick="setMode('text')">📝 Текст</button>
+                    <button class="mode-btn" id="btnModeImage" onclick="setMode('image')">🎨 Картинки</button>
+                </div>
+                <div class="img-settings" id="imgSettingsBox">
+                    <select id="imgSize" class="ai-select" style="padding: 4px; font-size: 12px; width: auto;">
+                        <option value="1024x1024">1:1 Квадрат</option>
+                        <option value="1024x1792">9:16 Вертикаль (DALL-E 3)</option>
+                        <option value="1792x1024">16:9 Горизонталь (DALL-E 3)</option>
+                    </select>
+                    <select id="imgQuality" class="ai-select" style="padding: 4px; font-size: 12px; width: auto;">
+                        <option value="standard">Standard</option>
+                        <option value="hd">HD (только DALL-E 3)</option>
+                    </select>
+                </div>
             </div>
             <div id="windowCounter" style="font-weight: bold; color: #555;">Окон: 0 из 6</div>
         </div>
@@ -132,8 +147,8 @@
         const container = document.getElementById('workspaceContainer');
         const counterText = document.getElementById('windowCounter');
         let windowCount = 0;
-        let MAX_WINDOWS = 6; // Будет меняться динамически
-        let currentMode = 'text'; // 'text' или 'image'
+        let MAX_WINDOWS = 6; 
+        let currentMode = 'text'; 
         let isLoading = false; 
 
         let sessions = JSON.parse(localStorage.getItem('ai_sessions')) || {};
@@ -143,7 +158,6 @@
         let currentPlan = localStorage.getItem('ai_plan_type') || "";
         let allowedModels = (localStorage.getItem('ai_allowed_models') || "").split(',');
 
-        // --- МОДЕЛИ С РАЗДЕЛЕНИЕМ ПО ТИПАМ ---
         const allModels = [
             { id: "gpt-5.4", label: "GPT-5.4", type: "text" },
             { id: "gpt-5.2", label: "GPT-5.2", type: "text" },
@@ -161,21 +175,26 @@
             { id: "gemini-2.5-flash-lite", label: "Gemini 2.5 Flash Lite", type: "text" },
             { id: "sonar", label: "Perplexity Sonar", type: "text" },
             { id: "sonar-pro", label: "Perplexity Sonar Pro", type: "text" },
-            // НОВЫЕ МОДЕЛИ КАРТИНОК
-            { id: "dall-e-3", label: "DALL-E 3", type: "image" }
+            // МОДЕЛИ КАРТИНОК
+            { id: "dall-e-3", label: "DALL-E 3", type: "image" },
+            { id: "dall-e-2", label: "DALL-E 2", type: "image" }
         ];
 
         // --- ЛОГИКА РЕЖИМОВ (Текст / Картинки) ---
         function setMode(mode) {
+            if (currentMode === mode) return; // Если уже в этом режиме, ничего не делаем
             currentMode = mode;
             MAX_WINDOWS = mode === 'text' ? 6 : 2;
 
             document.getElementById('btnModeText').classList.toggle('active', mode === 'text');
             document.getElementById('btnModeImage').classList.toggle('active', mode === 'image');
+            
+            // Показываем настройки и меняем UI
+            document.getElementById('imgSettingsBox').style.display = mode === 'image' ? 'flex' : 'none';
             document.getElementById('summaryBtn').style.display = mode === 'text' ? 'block' : 'none';
             document.getElementById('userInput').placeholder = mode === 'text' ? "Спроси нейросети о чем угодно..." : "Опишите картинку, которую хотите создать...";
 
-            // Закрываем лишние окна, если перешли в режим картинок
+            // Закрываем лишние окна
             const windows = document.querySelectorAll('.ai-window');
             if (windows.length > MAX_WINDOWS) {
                 for (let i = windows.length - 1; i >= MAX_WINDOWS; i--) {
@@ -184,13 +203,14 @@
                 }
             }
             
-            // Обновляем списки моделей в открытых окнах
+            // Обновляем списки моделей
             document.querySelectorAll('.ai-select').forEach(select => {
                 select.innerHTML = getModelsHTML();
             });
-
             updateLayout();
-            saveSessions();
+
+            // Создаем новую чистую сессию при смене режима
+            createNewSession();
         }
 
         function getModelsHTML() {
@@ -198,6 +218,7 @@
                 (allowedModels.includes(m.id) || allowedModels[0] === "") && 
                 m.type === currentMode
             );
+            if (availableModels.length === 0) return `<option value="" disabled selected>Нет доступных моделей</option>`;
             return availableModels.map(m => `<option value="${m.id}">${m.label}</option>`).join('');
         }
 
@@ -304,6 +325,9 @@
             const historyKeys = Object.keys(chatHistories);
             let neededWindows = historyKeys.length > 0 ? historyKeys.length : 3;
             
+            // Если загружаем сессию картинок, не открываем больше 2 окон
+            if (currentMode === 'image' && neededWindows > 2) neededWindows = 2;
+            
             while (windowCount < neededWindows && windowCount < MAX_WINDOWS) addWindow();
 
             const windows = document.querySelectorAll('.ai-window');
@@ -316,7 +340,6 @@
                     chatHistories[index].forEach(msg => {
                         const div = document.createElement('div');
                         div.className = 'msg ' + (msg.role === 'user' ? 'msg-user' : 'msg-ai');
-                        // Если это HTML (картинка), вставляем как HTML
                         if (msg.content.includes('<img')) {
                             div.innerHTML = msg.content;
                         } else {
@@ -435,9 +458,13 @@
             inputField.value = "";
             inputField.style.height = 'auto';
 
+            // Собираем настройки картинки
+            const imgSize = currentMode === 'image' ? document.getElementById("imgSize").value : "";
+            const imgQuality = currentMode === 'image' ? document.getElementById("imgQuality").value : "";
+
             windows.forEach(async (win, index) => {
                 const select = win.querySelector('.ai-select');
-                if (!select) return; 
+                if (!select || !select.value) return; 
                 const model = select.value;
                 const chatBox = win.querySelector('.ai-chat-box');
 
@@ -466,9 +493,9 @@
                             model: model,
                             history: targetHistories[index],
                             user_email: currentUser,
-                            task_type: currentMode, // ПЕРЕДАЕМ ТИП ЗАДАЧИ!
-                            image_size: "1024x1024",
-                            image_quality: "standard"
+                            task_type: currentMode,
+                            image_size: imgSize,
+                            image_quality: imgQuality
                         })
                     });
 
@@ -487,7 +514,6 @@
 
                     if (currentSessionId === targetSessionId) {
                         if (document.body.contains(msgAi)) {
-                            // Если это картинка (есть тег img), вставляем как HTML
                             if (answerText.includes('<img')) {
                                 msgAi.innerHTML = answerText;
                             } else {
