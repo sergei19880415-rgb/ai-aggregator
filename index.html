@@ -139,7 +139,7 @@
         let currentUser = localStorage.getItem('ai_user_email') || "";
         let currentPlan = localStorage.getItem('ai_plan_type') || "";
         
-        // УБИРАЕМ ПРОБЕЛЫ ИЗ ТАРИФА, чтобы DALL-E 3 всегда находился
+        // Убираем пробелы из тарифа, чтобы всё работало четко
         let allowedModels = (localStorage.getItem('ai_allowed_models') || "").split(',').map(m => m.trim());
 
         const allModels = [
@@ -245,7 +245,6 @@
                     localStorage.setItem('ai_allowed_models', data.allowedModels || "");
                     currentUser = email; 
                     currentPlan = data.planType; 
-                    // Сразу очищаем от пробелов при логине!
                     allowedModels = (data.allowedModels || "").split(',').map(m => m.trim());
                     checkAuth(); 
                 } else {
@@ -464,7 +463,7 @@
                 const model = select.value;
                 const chatBox = win.querySelector('.ai-chat-box');
 
-                // Берем настройки картинки ИМЕННО из этого окна
+                // Берем настройки картинки из этого окна
                 const imgSize = currentMode === 'image' ? win.querySelector('.size-select').value : "";
                 const imgQuality = currentMode === 'image' ? win.querySelector('.quality-select').value : "";
 
@@ -495,7 +494,8 @@
                             user_email: currentUser,
                             task_type: currentMode,
                             image_size: imgSize,
-                            image_quality: imgQuality
+                            image_quality: imgQuality,
+                            allowed_models: allowedModels.join(',') // ВОЗВРАЩАЕМ ОТПРАВКУ ТАРИФА В N8N
                         })
                     });
 
@@ -592,7 +592,8 @@
                         model: "summary", 
                         history: [], 
                         user_email: currentUser,
-                        task_type: "text"
+                        task_type: "text",
+                        allowed_models: allowedModels.join(',') // Саммаризатору тоже полезно передавать тариф
                     })
                 });
 
