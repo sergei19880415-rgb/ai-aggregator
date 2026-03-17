@@ -46,7 +46,6 @@
         
         .ai-window { background: #fff; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); display: flex; flex-direction: column; overflow: hidden; transition: 0.3s; flex: 1 1 calc(33.333% - 10px); min-width: 300px; height: calc(100vh - 160px); }
         
-        /* Адаптивная высота окон */
         .workspace[data-count="4"] .ai-window,
         .workspace[data-count="5"] .ai-window,
         .workspace[data-count="6"] .ai-window { height: calc(50vh - 90px); }
@@ -64,11 +63,22 @@
         .msg-user { background: #e3f2fd; color: #0d47a1; align-self: flex-end; border-bottom-right-radius: 2px; }
         .msg-ai { background: #fff; border: 1px solid #eee; color: #333; align-self: flex-start; border-bottom-left-radius: 2px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
 
-        .input-area { padding: 15px 20px; background: #fff; border-top: 1px solid #e0e0e0; display: flex; gap: 10px; align-items: flex-end; }
-        .input-box { flex: 1; display: flex; background: #f1f3f4; border-radius: 20px; padding: 5px 15px; align-items: flex-end; }
+        /* ИНПУТ И ФАЙЛЫ */
+        .input-wrapper { display: flex; flex-direction: column; background: #fff; border-top: 1px solid #e0e0e0; }
+        .file-preview-area { display: none; padding: 10px 20px 0 20px; }
+        .file-badge { display: inline-flex; align-items: center; background: #e3f2fd; color: #0d47a1; padding: 5px 12px; border-radius: 15px; font-size: 13px; font-weight: bold; }
+        .file-remove { cursor: pointer; margin-left: 8px; color: #d32f2f; font-weight: bold; }
+        
+        .input-area { padding: 10px 20px 15px 20px; display: flex; gap: 10px; align-items: flex-end; }
+        .input-box { flex: 1; display: flex; background: #f1f3f4; border-radius: 20px; padding: 5px 15px; align-items: flex-end; gap: 8px; }
         textarea { flex: 1; border: none; background: transparent; padding: 10px 0; font-size: 15px; outline: none; resize: none; max-height: 150px; min-height: 24px; overflow-y: auto; }
+        
+        .attach-btn { background: transparent; color: #555; border-radius: 50%; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; font-size: 18px; margin-bottom: 5px; }
+        .attach-btn:hover { background: #e0e0e0; }
+        
         .send-btn { background: #1a73e8; color: white; border-radius: 50%; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; margin-bottom: 2px; font-size: 18px; }
         .send-btn:hover { background: #1557b0; }
+        
         .add-window-btn { background: #e0e0e0; padding: 0 20px; height: 44px; border-radius: 22px; font-weight: bold; font-size: 14px; }
         .add-window-btn:hover { background: #d0d0d0; }
         .summary-btn { background: linear-gradient(90deg, #ff8a00, #e52e71); color: white; padding: 0 20px; height: 44px; border-radius: 22px; font-weight: bold; font-size: 14px; }
@@ -112,13 +122,23 @@
         
         <div class="workspace" id="workspaceContainer"></div>
 
-        <div class="input-area">
-            <button class="add-window-btn" onclick="addWindow()">+ Окно</button>
-            <div class="input-box">
-                <textarea id="userInput" rows="1" placeholder="Спроси нейросети о чем угодно (Shift+Enter для переноса)..." oninput="autoResize(this)"></textarea>
-                <button class="send-btn" onclick="sendMessage()">➤</button>
+        <div class="input-wrapper">
+            <div class="file-preview-area" id="filePreviewArea">
+                <div class="file-badge">
+                    📎 <span id="fileNameDisplay" style="margin-left: 5px;">файл.pdf</span>
+                    <span class="file-remove" onclick="removeFile()">✖</span>
+                </div>
             </div>
-            <button class="summary-btn" id="summaryBtn" onclick="summarizeAll()">✨ Саммари</button>
+            <div class="input-area">
+                <button class="add-window-btn" onclick="addWindow()">+ Окно</button>
+                <div class="input-box">
+                    <input type="file" id="fileInput" style="display: none;" accept="image/*, .pdf, .txt, .csv, .docx">
+                    <button class="attach-btn" onclick="document.getElementById('fileInput').click()" title="Прикрепить файл">📎</button>
+                    <textarea id="userInput" rows="1" placeholder="Спроси нейросети о чем угодно..." oninput="autoResize(this)"></textarea>
+                    <button class="send-btn" onclick="sendMessage()">➤</button>
+                </div>
+                <button class="summary-btn" id="summaryBtn" onclick="summarizeAll()">✨ Саммари</button>
+            </div>
         </div>
     </div>
 
@@ -138,16 +158,44 @@
 
         let currentUser = localStorage.getItem('ai_user_email') || "";
         let currentPlan = localStorage.getItem('ai_plan_type') || "";
-        
-        // Убираем пробелы из тарифа, чтобы всё работало четко
         let allowedModels = (localStorage.getItem('ai_allowed_models') || "").split(',').map(m => m.trim());
 
+        // --- ЛОГИКА РАБОТЫ С ФАЙЛАМИ ---
+        let currentFileBase64 = null;
+        let currentFileMime = null;
+
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            document.getElementById('filePreviewArea').style.display = 'block';
+            document.getElementById('fileNameDisplay').innerText = file.name;
+
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                const result = event.target.result;
+                const split = result.split(',');
+                currentFileBase64 = split[1];
+                currentFileMime = split[0].match(/:(.*?);/)[1];
+            };
+            reader.readAsDataURL(file);
+        });
+
+        function removeFile() {
+            currentFileBase64 = null;
+            currentFileMime = null;
+            document.getElementById('fileInput').value = '';
+            document.getElementById('filePreviewArea').style.display = 'none';
+        }
+
+        // --- ОБНОВЛЕННЫЙ СПИСОК МОДЕЛЕЙ ---
         const allModels = [
-            { id: "gpt-5.4", label: "GPT-5.4", type: "text" },
-            { id: "gpt-5.2", label: "GPT-5.2", type: "text" },
-            { id: "gpt-5.1", label: "GPT-5.1", type: "text" },
-            { id: "gpt-5-mini", label: "GPT-5 Mini", type: "text" },
-            { id: "gpt-5-nano", label: "GPT-5 Nano", type: "text" },
+            // Текстовые модели (GPT 5.4)
+            { id: "gpt-5.4-pro", label: "GPT-5.4 Pro", type: "text" },
+            { id: "gpt-5.4-mini", label: "GPT-5.4 Mini", type: "text" },
+            { id: "gpt-5.4-nano", label: "GPT-5.4 Nano", type: "text" },
+            
+            // Текстовые модели (Остальные)
             { id: "claude-haiku-4-5-20251001", label: "Claude 4.5 Haiku", type: "text" },
             { id: "claude-sonnet-4-6", label: "Claude 4.6 Sonnet", type: "text" },
             { id: "claude-opus-4-6", label: "Claude 4.6 Opus", type: "text" },
@@ -159,8 +207,11 @@
             { id: "gemini-2.5-flash-lite", label: "Gemini 2.5 Flash Lite", type: "text" },
             { id: "sonar", label: "Perplexity Sonar", type: "text" },
             { id: "sonar-pro", label: "Perplexity Sonar Pro", type: "text" },
-            { id: "dall-e-3", label: "DALL-E 3", type: "image" },
-            { id: "dall-e-2", label: "DALL-E 2", type: "image" }
+
+            // Модели для картинок 
+            { id: "gpt-image-1-mini", label: "GPT Image 1 Mini", type: "image" },
+            { id: "gpt-image-1", label: "GPT Image 1", type: "image" },
+            { id: "gpt-image-1.5", label: "GPT Image 1.5", type: "image" }
         ];
 
         // --- ЛОГИКА РЕЖИМОВ ---
@@ -183,7 +234,6 @@
                 }
             }
             
-            // Показываем/скрываем настройки внутри окон
             document.querySelectorAll('.ai-window').forEach(win => {
                 const select = win.querySelector('.model-select');
                 if (select) select.innerHTML = getModelsHTML();
@@ -373,7 +423,7 @@
 
         document.querySelector('.new-chat-btn').onclick = createNewSession;
 
-        // --- СОЗДАНИЕ ОКОН (С НАСТРОЙКАМИ ВНУТРИ) ---
+        // --- СОЗДАНИЕ ОКОН ---
         function createWindow() {
             const win = document.createElement('div');
             win.className = 'ai-window';
@@ -442,8 +492,13 @@
 
         async function sendMessage() {
             const inputField = document.getElementById("userInput");
-            const text = inputField.value.trim();
-            if (!text) return;
+            let text = inputField.value.trim();
+            
+            if (!text && currentFileBase64) {
+                text = "Опиши или проанализируй этот файл.";
+            } else if (!text && !currentFileBase64) {
+                return;
+            }
 
             const targetSessionId = currentSessionId;
             const targetHistories = sessions[targetSessionId].histories = sessions[targetSessionId].histories || {};
@@ -456,6 +511,11 @@
             const windows = document.querySelectorAll('.ai-window');
             inputField.value = "";
             inputField.style.height = 'auto';
+            
+            const fileDataToSend = currentFileBase64;
+            const fileMimeToSend = currentFileMime;
+            const fileNameToSend = document.getElementById('fileNameDisplay').innerText;
+            removeFile();
 
             windows.forEach(async (win, index) => {
                 const select = win.querySelector('.model-select');
@@ -463,23 +523,27 @@
                 const model = select.value;
                 const chatBox = win.querySelector('.ai-chat-box');
 
-                // Берем настройки картинки из этого окна
                 const imgSize = currentMode === 'image' ? win.querySelector('.size-select').value : "";
                 const imgQuality = currentMode === 'image' ? win.querySelector('.quality-select').value : "";
 
                 const msgUser = document.createElement('div');
                 msgUser.className = 'msg msg-user';
-                msgUser.innerText = text;
+                
+                if (fileDataToSend) {
+                    msgUser.innerHTML = `📎 <i>${fileNameToSend}</i><br><br>${text}`;
+                } else {
+                    msgUser.innerText = text;
+                }
                 chatBox.appendChild(msgUser);
 
                 const msgAi = document.createElement('div');
                 msgAi.className = 'msg msg-ai';
-                msgAi.innerText = currentMode === 'image' ? 'Рисую...' : 'Печатает...';
+                msgAi.innerText = currentMode === 'image' ? 'Рисую...' : (fileDataToSend ? 'Изучаю файл...' : 'Печатает...');
                 chatBox.appendChild(msgAi);
                 chatBox.scrollTop = chatBox.scrollHeight;
 
                 if (!targetHistories[index]) targetHistories[index] = [];
-                targetHistories[index].push({ role: "user", content: text });
+                targetHistories[index].push({ role: "user", content: fileDataToSend ? `[Прикреплен файл]\n${text}` : text });
                 if (targetHistories[index].length > 20) targetHistories[index] = targetHistories[index].slice(-20);
                 saveSessions(); 
 
@@ -495,7 +559,9 @@
                             task_type: currentMode,
                             image_size: imgSize,
                             image_quality: imgQuality,
-                            allowed_models: allowedModels.join(',') // ВОЗВРАЩАЕМ ОТПРАВКУ ТАРИФА В N8N
+                            allowed_models: allowedModels.join(','),
+                            file_data: fileDataToSend, 
+                            file_mime: fileMimeToSend  
                         })
                     });
 
@@ -593,7 +659,7 @@
                         history: [], 
                         user_email: currentUser,
                         task_type: "text",
-                        allowed_models: allowedModels.join(',') // Саммаризатору тоже полезно передавать тариф
+                        allowed_models: allowedModels.join(',') 
                     })
                 });
 
