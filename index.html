@@ -554,6 +554,7 @@
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({ 
+                            session_id: targetSessionId,
                             user_query: text, 
                             model: model,
                             history: targetHistories[index],
