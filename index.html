@@ -144,6 +144,7 @@
 
     <script>
         const N8N_WEBHOOK_URL = "https://tgdomen.ru/webhook/3bcfce39-4b24-4493-b3a7-cab0030e8a36";
+        const N8N_UPLOAD_URL = "https://tgdomen.ru/webhook/file-upload"; // НОВЫЙ ВЕБХУК ДЛЯ R2
         const N8N_LOGIN_URL = "https://tgdomen.ru/webhook/login-auth"; 
 
         const container = document.getElementById('workspaceContainer');
@@ -161,8 +162,7 @@
         let allowedModels = (localStorage.getItem('ai_allowed_models') || "").split(',').map(m => m.trim());
 
         // --- ЛОГИКА РАБОТЫ С ФАЙЛАМИ ---
-        let currentFileBase64 = null;
-        let currentFileMime = null;
+        let currentFile = null;
 
         document.getElementById('fileInput').addEventListener('change', function(e) {
             const file = e.target.files[0];
@@ -170,34 +170,23 @@
 
             document.getElementById('filePreviewArea').style.display = 'block';
             document.getElementById('fileNameDisplay').innerText = file.name;
-
-            const reader = new FileReader();
-            reader.onload = function(event) {
-                const result = event.target.result;
-                const split = result.split(',');
-                currentFileBase64 = split[1];
-                currentFileMime = split[0].match(/:(.*?);/)[1];
-            };
-            reader.readAsDataURL(file);
+            currentFile = file; // Сохраняем сам файл, а не base64
         });
 
         function removeFile() {
-            currentFileBase64 = null;
-            currentFileMime = null;
+            currentFile = null;
             document.getElementById('fileInput').value = '';
             document.getElementById('filePreviewArea').style.display = 'none';
         }
 
         // --- ОБНОВЛЕННЫЙ СПИСОК МОДЕЛЕЙ ---
         const allModels = [
-            // Текстовые модели
+            // Текстовые модели (GPT 5.4)
             { id: "gpt-5.4-pro", label: "GPT-5.4 Pro", type: "text" },
             { id: "gpt-5.4-mini", label: "GPT-5.4 Mini", type: "text" },
             { id: "gpt-5.4-nano", label: "GPT-5.4 Nano", type: "text" },
-            { id: "gpt-5.2", label: "GPT-5.2", type: "text" },
-            { id: "gpt-5.1", label: "GPT-5.1", type: "text" },
-            { id: "gpt-5-mini", label: "GPT-5 Mini", type: "text" },
-            { id: "gpt-5-nano", label: "GPT-5 Nano", type: "text" },  
+            
+            // Текстовые модели (Остальные)
             { id: "claude-haiku-4-5-20251001", label: "Claude 4.5 Haiku", type: "text" },
             { id: "claude-sonnet-4-6", label: "Claude 4.6 Sonnet", type: "text" },
             { id: "claude-opus-4-6", label: "Claude 4.6 Opus", type: "text" },
@@ -496,9 +485,9 @@
             const inputField = document.getElementById("userInput");
             let text = inputField.value.trim();
             
-            if (!text && currentFileBase64) {
+            if (!text && currentFile) {
                 text = "Опиши или проанализируй этот файл.";
-            } else if (!text && !currentFileBase64) {
+            } else if (!text && !currentFile) {
                 return;
             }
 
@@ -514,24 +503,21 @@
             inputField.value = "";
             inputField.style.height = 'auto';
             
-            const fileDataToSend = currentFileBase64;
-            const fileMimeToSend = currentFileMime;
-            const fileNameToSend = document.getElementById('fileNameDisplay').innerText;
+            // Забираем файл из переменной перед очисткой UI
+            const fileToSend = currentFile;
+            const fileNameToSend = currentFile ? currentFile.name : "";
             removeFile();
 
-            windows.forEach(async (win, index) => {
+            // 1. Создаем визуальные окна сообщений (сразу, чтобы не было задержки для юзера)
+            windows.forEach((win) => {
                 const select = win.querySelector('.model-select');
                 if (!select || !select.value) return; 
-                const model = select.value;
+
                 const chatBox = win.querySelector('.ai-chat-box');
-
-                const imgSize = currentMode === 'image' ? win.querySelector('.size-select').value : "";
-                const imgQuality = currentMode === 'image' ? win.querySelector('.quality-select').value : "";
-
                 const msgUser = document.createElement('div');
                 msgUser.className = 'msg msg-user';
                 
-                if (fileDataToSend) {
+                if (fileToSend) {
                     msgUser.innerHTML = `📎 <i>${fileNameToSend}</i><br><br>${text}`;
                 } else {
                     msgUser.innerText = text;
@@ -540,12 +526,54 @@
 
                 const msgAi = document.createElement('div');
                 msgAi.className = 'msg msg-ai';
-                msgAi.innerText = currentMode === 'image' ? 'Рисую...' : (fileDataToSend ? 'Изучаю файл...' : 'Печатает...');
+                // Если файл есть, показываем "Загрузка на сервер", иначе "Печатает..."
+                msgAi.innerText = fileToSend ? 'Загрузка файла на сервер...' : (currentMode === 'image' ? 'Рисую...' : 'Печатает...');
                 chatBox.appendChild(msgAi);
                 chatBox.scrollTop = chatBox.scrollHeight;
+                
+                // Сохраняем ссылку на поле ответа для обновления
+                win.currentMsgAi = msgAi;
+            });
+
+            // 2. Блок загрузки файла (Сработает только если прикреплен файл)
+            if (fileToSend) {
+                const formData = new FormData();
+                formData.append('data', fileToSend); // n8n ожидает бинарник в поле "data"
+                formData.append('session_id', targetSessionId);
+                formData.append('user_email', currentUser);
+                
+                try {
+                    const uploadRes = await fetch(N8N_UPLOAD_URL, {
+                        method: "POST",
+                        body: formData
+                    });
+                    
+                    if (!uploadRes.ok) throw new Error("Upload failed");
+                    
+                    // Как только загрузилось в R2, меняем текст заглушки
+                    windows.forEach(win => {
+                        if (win.currentMsgAi) win.currentMsgAi.innerText = 'Анализирую файл...';
+                    });
+                } catch (err) {
+                    windows.forEach(win => {
+                        if (win.currentMsgAi) win.currentMsgAi.innerText = 'Ошибка при загрузке файла.';
+                    });
+                    return; // Прерываем отправку в нейросети, если файл не загрузился
+                }
+            }
+
+            // 3. Отправляем основные промпты к нейросетям (через Main Router)
+            windows.forEach(async (win, index) => {
+                const select = win.querySelector('.model-select');
+                if (!select || !select.value) return; 
+                const model = select.value;
+                const msgAi = win.currentMsgAi;
+
+                const imgSize = currentMode === 'image' ? win.querySelector('.size-select').value : "";
+                const imgQuality = currentMode === 'image' ? win.querySelector('.quality-select').value : "";
 
                 if (!targetHistories[index]) targetHistories[index] = [];
-                targetHistories[index].push({ role: "user", content: fileDataToSend ? `[Прикреплен файл]\n${text}` : text });
+                targetHistories[index].push({ role: "user", content: fileToSend ? `[Прикреплен файл]\n${text}` : text });
                 if (targetHistories[index].length > 20) targetHistories[index] = targetHistories[index].slice(-20);
                 saveSessions(); 
 
@@ -554,7 +582,6 @@
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({ 
-                            session_id: targetSessionId,
                             user_query: text, 
                             model: model,
                             history: targetHistories[index],
@@ -563,8 +590,7 @@
                             image_size: imgSize,
                             image_quality: imgQuality,
                             allowed_models: allowedModels.join(','),
-                            file_data: fileDataToSend, 
-                            file_mime: fileMimeToSend  
+                            session_id: targetSessionId // ПЕРЕДАЕМ SESSION_ID В n8n ДЛЯ СВЯЗКИ
                         })
                     });
 
@@ -616,7 +642,7 @@
                 const msgs = win.querySelectorAll('.msg-ai');
                 if (msgs.length > 0) {
                     const lastMsg = msgs[msgs.length - 1].innerText;
-                    if (lastMsg !== "Печатает..." && lastMsg !== "Ошибка сети" && lastMsg !== "") {
+                    if (lastMsg !== "Печатает..." && lastMsg !== "Ошибка сети" && lastMsg !== "" && !lastMsg.includes("Загрузка файла")) {
                         combinedText += `--- Ответ от ${modelName} ---\n${lastMsg}\n\n`;
                         hasAnswers = true;
                     }
@@ -662,7 +688,8 @@
                         history: [], 
                         user_email: currentUser,
                         task_type: "text",
-                        allowed_models: allowedModels.join(',') 
+                        allowed_models: allowedModels.join(','),
+                        session_id: currentSessionId
                     })
                 });
 
