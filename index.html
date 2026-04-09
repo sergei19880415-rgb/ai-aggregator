@@ -177,7 +177,6 @@
             if (files.length === 0) return;
 
             for (let i = 0; i < files.length; i++) {
-                // Избегаем дублей по имени
                 if (!currentFiles.find(f => f.name === files[i].name)) {
                     currentFiles.push(files[i]);
                 }
@@ -229,27 +228,39 @@
                     sessions[currentSessionId].activeFiles = [];
                     saveSessions();
                     updateMemoryBar();
-                    // Здесь в будущем можно отправить вебхук в n8n, чтобы он тоже сбросил is_active = False в БД
                 }
             }
         }
 
-        // --- ОБНОВЛЕННЫЙ СПИСОК МОДЕЛЕЙ ---
+        // --- ОБНОВЛЕННЫЙ И ПОЛНЫЙ СПИСОК МОДЕЛЕЙ ИЗ ТАБЛИЦЫ ---
         const allModels = [
-            { id: "gpt-5.4-pro", label: "GPT-5.4 Pro", type: "text" },
-            { id: "gpt-5.4-mini", label: "GPT-5.4 Mini", type: "text" },
+            // Линейка OpenAI (все версии)
+            { id: "gpt-5-nano", label: "GPT-5 Nano", type: "text" },
+            { id: "gpt-5-mini", label: "GPT-5 Mini", type: "text" },
+            { id: "gpt-5.2", label: "GPT-5.2", type: "text" },
             { id: "gpt-5.4-nano", label: "GPT-5.4 Nano", type: "text" },
+            { id: "gpt-5.4-mini", label: "GPT-5.4 Mini", type: "text" },
+            { id: "gpt-5.4", label: "GPT-5.4", type: "text" },
+            { id: "gpt-5.4-pro", label: "GPT-5.4 Pro", type: "text" },
+            
+            // Линейка Anthropic
             { id: "claude-haiku-4-5-20251001", label: "Claude 4.5 Haiku", type: "text" },
             { id: "claude-sonnet-4-6", label: "Claude 4.6 Sonnet", type: "text" },
             { id: "claude-opus-4-6", label: "Claude 4.6 Opus", type: "text" },
-            { id: "gemini-3.1-pro-preview", label: "Gemini 3.1 Pro", type: "text" },
-            { id: "gemini-3.1-flash-lite-preview", label: "Gemini 3.1 Flash Lite", type: "text" },
-            { id: "gemini-3-flash-preview", label: "Gemini 3 Flash", type: "text" },
-            { id: "gemini-2.5-pro", label: "Gemini 2.5 Pro", type: "text" },
-            { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash", type: "text" },
+            
+            // Линейка Google Gemini
             { id: "gemini-2.5-flash-lite", label: "Gemini 2.5 Flash Lite", type: "text" },
+            { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash", type: "text" },
+            { id: "gemini-2.5-pro", label: "Gemini 2.5 Pro", type: "text" },
+            { id: "gemini-3-flash-preview", label: "Gemini 3 Flash", type: "text" },
+            { id: "gemini-3.1-flash-lite-preview", label: "Gemini 3.1 Flash Lite", type: "text" },
+            { id: "gemini-3.1-pro-preview", label: "Gemini 3.1 Pro", type: "text" },
+            
+            // Линейка Perplexity
             { id: "sonar", label: "Perplexity Sonar", type: "text" },
             { id: "sonar-pro", label: "Perplexity Sonar Pro", type: "text" },
+
+            // Модели для картинок 
             { id: "gpt-image-1-mini", label: "GPT Image 1 Mini", type: "image" },
             { id: "gpt-image-1", label: "GPT Image 1", type: "image" },
             { id: "gpt-image-1.5", label: "GPT Image 1.5", type: "image" }
@@ -331,6 +342,7 @@
 
                 if (data.success) {
                     localStorage.setItem('ai_user_email', email);
+                    localStorage.setItem('ai_user_password', password); // <-- ТЕПЕРЬ СОХРАНЯЕМ ПАРОЛЬ
                     localStorage.setItem('ai_user_name', data.firstName + " " + (data.lastName || ""));
                     localStorage.setItem('ai_plan_type', data.planType || "Базовый");
                     localStorage.setItem('ai_allowed_models', data.allowedModels || "");
@@ -352,6 +364,7 @@
 
         function logout() {
             localStorage.removeItem('ai_user_email');
+            localStorage.removeItem('ai_user_password'); // <-- ОЧИЩАЕМ ПАРОЛЬ ПРИ ВЫХОДЕ
             localStorage.removeItem('ai_user_name');
             localStorage.removeItem('ai_plan_type');
             localStorage.removeItem('ai_allowed_models');
@@ -397,7 +410,7 @@
         function loadSession(id) {
             isLoading = true; 
             currentSessionId = id;
-            if (!sessions[id].activeFiles) sessions[id].activeFiles = []; // защита от старых сейвов
+            if (!sessions[id].activeFiles) sessions[id].activeFiles = []; 
 
             const chatHistories = sessions[id].histories || {};
             const loadedModels = sessions[id].models || {}; 
@@ -567,7 +580,7 @@
             // 1. Создаем визуальные окна сообщений
             windows.forEach((win) => {
                 const select = win.querySelector('.model-select');
-                if (!select || !select.value) return; 
+                if (!select || !select.value) return; // ЗАЩИТА: если модель не выбрана, пропускаем
 
                 const chatBox = win.querySelector('.ai-chat-box');
                 const msgUser = document.createElement('div');
@@ -606,12 +619,10 @@
                     
                     const uploadResults = await Promise.all(uploadPromises);
                     
-                    // Проверяем, все ли загрузилось успешно
                     for (let res of uploadResults) {
                         if (!res.ok) throw new Error("Upload failed");
                     }
                     
-                    // Сохраняем названия файлов в память сессии
                     if (!sessions[targetSessionId].activeFiles) sessions[targetSessionId].activeFiles = [];
                     filesToSend.forEach(f => {
                         if (!sessions[targetSessionId].activeFiles.includes(f.name)) {
@@ -660,6 +671,7 @@
                             model: model,
                             history: targetHistories[index],
                             user_email: currentUser,
+                            password: localStorage.getItem('ai_user_password'), // <-- ПЕРЕДАЕМ ПАРОЛЬ В N8N
                             task_type: currentMode,
                             image_size: imgSize,
                             image_quality: imgQuality,
@@ -674,7 +686,9 @@
                     if (response.ok) {
                         try {
                             const data = JSON.parse(raw);
-                            answerText = data.text || data.answer || "Пустой ответ";
+                            // Если сервер возвращает ошибку о лимитах, покажем ее
+                            if (data.error) answerText = "⚠️ " + data.error;
+                            else answerText = data.text || data.answer || "Пустой ответ";
                         } catch (e) { answerText = "Ошибка JSON"; }
                     }
 
@@ -761,6 +775,7 @@
                         model: "summary", 
                         history: [], 
                         user_email: currentUser,
+                        password: localStorage.getItem('ai_user_password'), // <-- ПЕРЕДАЕМ ПАРОЛЬ В N8N
                         task_type: "text",
                         allowed_models: allowedModels.join(','),
                         session_id: currentSessionId
@@ -773,7 +788,8 @@
                 if (response.ok) {
                     try {
                         const data = JSON.parse(raw);
-                        answerText = data.text || data.answer || "Пустой ответ";
+                        if (data.error) answerText = "⚠️ " + data.error;
+                        else answerText = data.text || data.answer || "Пустой ответ";
                     } catch (e) { answerText = "Ошибка JSON"; }
                 }
 
